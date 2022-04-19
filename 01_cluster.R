@@ -1,129 +1,65 @@
 library(tidyverse)
-library(meanShiftR)
-library(maptree)
-library(gridExtra)
+library(dtwclust)
 
-options(scipen=9999)
+#1. Load data----
+dat.raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
+  dplyr::filter(!id %in% c(46768277, 33088)) %>% 
+  mutate(legid = paste(id, year, sep="-"))
 
-#TO DO: TRY WITH STOPOVER####
+#2. Pick tag years with enough data----
+ggplot(dat.raw) +
+  geom_point(aes(y=legid, x=doy, colour=factor(season)))
 
-#1. Import data----
-dat <- read.csv("Data/LBCUMCLocations.csv") 
+ggsave(filename="Figs/Dotplot.jpeg", width=20, height=12)
 
-#2. Wrangle data----
-
-#ID birds with breeding and wintering ground lcoations
-dat.n <- dat  %>% 
-  dplyr::filter(season %in% c("breed", "winter")) %>% 
-  group_by(id) %>% 
-  summarize(n=n()) %>% 
-  dplyr::filter(n==2) %>% 
+dat.day <- dat.raw %>% 
+  dplyr::filter(doy >= 35, doy <= 220) %>% 
+  group_by(legid) %>% 
+  summarize(days=n()) %>% 
   ungroup()
 
-#Filter
-bw <- dat %>% 
-  dplyr::filter(season %in% c("breed", "winter"),
-                id %in% dat.n$id) %>% 
-  dplyr::select(id, season, X, Y) %>% 
-  pivot_wider(id_cols=id, names_from=season, values_from=X:Y)
+#3. Select one year per id----
+dat.i <- dat.day %>% 
+  dplyr::filter(days==max(days)) %>% 
+  left_join(dat.raw) %>% 
+  dplyr::select(id, year) %>% 
+  unique() %>% 
+  group_by(id) %>% 
+  sample_n(1) %>% 
+  ungroup() %>% 
+  left_join(dat.raw) %>% 
+  arrange(id, doy) %>% 
+  dplyr::select(legid, X, Y)
 
-#3. K means clustering----
+#4. Split into a list----
+dat.s <- group_split(dat.i, legid, .keep=FALSE)
+names(dat.s) <- unique(dat.i$legid)
 
-#3a. Try with both breeding & wintering locations
-bw.clust <- bw %>% 
-  dplyr::select("X_breed", "Y_breed", "X_winter", "Y_winter")
+#5. Cluster----
+clust.s <- tsclust(dat.s, k = 2L:9L,
+                   distance = "dtw_basic", centroid = "pam",
+                   seed = 94L)
+names(clust.s) <- paste0("k_", 2L:9L)
 
-set.seed(1234)
-clust2 <- kmeans(bw.clust, 2)
-bw$bwcluster2 <- clust2$cluster
-clust3 <- kmeans(bw.clust, 3)
-bw$bwcluster3 <- clust3$cluster
-clust4 <- kmeans(bw.clust, 4)
-bw$bwcluster4 <- clust4$cluster
-clust5 <- kmeans(bw.clust, 5)
-bw$bwcluster5 <- clust5$cluster
-clust6 <- kmeans(bw.clust, 6)
-bw$bwcluster6 <- clust6$cluster
-clust7 <- kmeans(bw.clust, 7)
-bw$bwcluster7 <- clust7$cluster
-clust8 <- kmeans(bw.clust, 8)
-bw$bwcluster8 <- clust8$cluster
+#6. Apply clusters to data----
+dat.clust <- data.frame(legid = unique(dat.i$legid),
+                        clust2 = clust.s$k_2@cluster,
+                        clust3 = clust.s$k_3@cluster,
+                        clust4 = clust.s$k_4@cluster,
+                        clust5 = clust.s$k_5@cluster,
+                        clust6 = clust.s$k_6@cluster,
+                        clust7 = clust.s$k_7@cluster,
+                        clust8 = clust.s$k_8@cluster,
+                        clust9 = clust.s$k_9@cluster) %>% 
+  full_join(dat.i) %>% 
+  left_join(dat.raw)
 
-breed <- ggplot(bw) +
-  geom_point(aes(x=X_breed, y=Y_breed, colour=factor(bwcluster8)), show.legend = FALSE)
-winter <- ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(bwcluster8)), show.legend = FALSE)
-grid.arrange(breed, winter, nrow=2)
+#7. Visualize----
+ggplot(dat.clust) +
+  geom_line(data=dat.i, aes(x=X, y=Y, group=legid)) +
+  geom_point(aes(x=X, y=Y, colour=factor(clust4)))
 
-ggplot(bw) +
-  geom_point(aes(x=X_breed, y=Y_breed, colour=factor(bwcluster3)))
-ggplot(bw) +
-  geom_point(aes(x=X_breed, y=Y_breed, colour=factor(bwcluster4)))
-
-ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(bwcluster2)))
-ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(bwcluster3)))
-ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(bwcluster4)))
-
-#3b. Try with just wintering locations
-w.clust <- bw %>% 
-  dplyr::select("X_winter", "Y_winter")
-
-set.seed(1234)
-clust2 <- kmeans(w.clust, 2)
-bw$wcluster2 <- clust2$cluster
-clust3 <- kmeans(w.clust, 3)
-bw$wcluster3 <- clust3$cluster
-clust4 <- kmeans(w.clust, 4)
-bw$wcluster4 <- clust4$cluster
-clust5 <- kmeans(w.clust, 5)
-bw$wcluster5 <- clust5$cluster
-
-ggplot(bw) +
-  geom_point(aes(x=X_breed, y=Y_breed, colour=factor(wcluster2)))
-ggplot(bw) +
-  geom_point(aes(x=X_breed, y=Y_breed, colour=factor(wcluster3)))
-ggplot(bw) +
-  geom_point(aes(x=X_breed, y=Y_breed, colour=factor(wcluster4)))
-
-ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(wcluster2)))
-ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(wcluster3)))
-ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(wcluster4)))
-
-#4. Meanshift----
-
-mat1 <- matrix(bw$X_winter)
-mat2 <- matrix(bw$Y_winter)
-mat <- cbind(mat1, mat2)
-
-shift <- meanShift(mat,
-                   algorithm="KDTREE",
-                   bandwidth=c(1000000,1000000))
-
-bw$shift <- shift[[1]]
-
-ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(shift)))
-
-#5. Hierarchical clustering----
-bw.clust <- bw %>% 
-  dplyr::select("X_breed", "Y_breed", "X_winter", "Y_winter")
-
-bw.dist <- dist(bw.clust)
-
-bw.hclust <- hclust(bw.dist, method="complete")
-bw.kgs <- kgs(bw.hclust, bw.dist)
-
-bw$hclust <- cutree(bw.hclust, 8)
-
-breed <- ggplot(bw) +
-  geom_point(aes(x=X_breed, y=Y_breed, colour=factor(hclust)), show.legend = FALSE)
-winter <- ggplot(bw) +
-  geom_point(aes(x=X_winter, y=Y_winter, colour=factor(hclust)), show.legend = FALSE)
-
-grid.arrange(breed, winter, nrow=2)
+ggplot(dat.clust) +
+#  geom_line(data=dat.i, aes(x=X, y=Y, group=legid)) +
+  geom_point(aes(x=X, y=Y, colour=factor(clust4))) + 
+  facet_wrap(~season)
