@@ -48,9 +48,24 @@ trends <- generate_trends(indices = indices,
                           Min_year = 1970,
                           Max_year = 2019)
 
+write.csv(trends, "bbsBayesModels/Trends_gamye.csv")
+
 #Map
 mp <- generate_map(trends, 
                    select=TRUE,
                    stratify_by="latlong",
-                   species = "Long-billed Curlew")
+                   species = "Long-billed Curlew") +
+  
 print(mp)
+
+#Map with clusters
+bw.sf <- st_as_sf(bw, coords=c("X_breed", "Y_breed"), crs=3857) %>% 
+  st_transform(crs=st_crs(map))  %>% 
+  st_coordinates() %>% 
+  data.frame() %>% 
+  rename(lat=Y, lon=X) %>% 
+  cbind(bw)
+
+mp +
+  geom_point(data=bw.sf, aes(x=lon, y=lat, colour=factor(bwcluster8))) +
+  scale_colour_viridis_d()
