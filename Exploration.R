@@ -2,6 +2,12 @@ library(tidyverse)
 library(meanShiftR)
 library(maptree)
 library(gridExtra)
+library(sf)
+library(sp)
+library(MigConnectivity)
+library(raster)
+library(vegan)
+library(data.table)
 
 options(scipen=9999)
 
@@ -20,20 +26,6 @@ ggplot(stop.n) +
   geom_jitter(aes(x=X, y=n)) +
   geom_smooth(aes(x=X, y=n)) +
   facet_wrap(~season)
-
-
-library(tidyverse)
-library(meanShiftR)
-library(maptree)
-library(gridExtra)
-library(sf)
-library(sp)
-library(MigConnectivity)
-library(raster)
-library(vegan)
-library(data.table)
-
-options(scipen=9999)
 
 #TO DO: TRY WITH STOPOVER####
 
