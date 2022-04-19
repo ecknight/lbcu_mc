@@ -1,65 +1,92 @@
 library(tidyverse)
-library(dtwclust)
+library(ClustImpute)
+library(data.table)
 
-#1. Load data----
-dat.raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(!id %in% c(46768277, 33088)) %>% 
-  mutate(legid = paste(id, year, sep="-"))
+options(scipen=9999)
 
-#2. Pick tag years with enough data----
-ggplot(dat.raw) +
-  geom_point(aes(y=legid, x=doy, colour=factor(season)))
+#1. Import data----
+dat.raw <- read.csv("Data/LBCUMCLocations.csv") 
 
-ggsave(filename="Figs/Dotplot.jpeg", width=20, height=12)
+#NOTE: Bootstrapping could occur in step 2 or step 3. Should probably do step 2
 
-dat.day <- dat.raw %>% 
-  dplyr::filter(doy >= 35, doy <= 220) %>% 
-  group_by(legid) %>% 
-  summarize(days=n()) %>% 
+#2. Wrangle data to longest duration winter & stopover location for each individual----
+dat.days <- dat.raw %>% 
+  group_by(id, year, season) %>% 
+  arrange(-days) %>% 
+  mutate(cluster.days = row_number()) %>% 
   ungroup()
 
-#3. Select one year per id----
-dat.i <- dat.day %>% 
-  dplyr::filter(days==max(days)) %>% 
-  left_join(dat.raw) %>% 
+dat.days %>% 
+  group_by(season, cluster.days) %>% 
+  summarize(mean = mean(days), 
+            sd = sd(days),
+            max = max(days),
+            min = min(days))
+
+ggplot(dat.days) +
+  geom_histogram(aes(x=days)) +
+  facet_grid(cluster.days ~ season)
+
+dat <- dat.days %>% 
+#  dplyr::filter(season %in% c("breed", "winter")) %>% 
+  dplyr::filter(cluster.days==1)
+
+table(dat$season)
+
+#3. Use only birds with known breeding & wintering location---
+#ID birds with breeding and wintering ground locations
+dat.n <- dat  %>% 
+  dplyr::filter(season %in% c("breed", "winter")) %>% 
+  group_by(id, season) %>% 
+  summarize(n=n()) %>% 
+  group_by(id) %>% 
+  summarize(n=n()) %>% 
+  dplyr::filter(n==2) %>% 
+  ungroup()
+
+#4. Pick one year of data for each individual and make it wide----
+set.seed(1234)
+dat.i <- dat.days %>% 
+  dplyr::filter(id %in% dat.n$id) %>% 
   dplyr::select(id, year) %>% 
   unique() %>% 
   group_by(id) %>% 
   sample_n(1) %>% 
   ungroup() %>% 
-  left_join(dat.raw) %>% 
-  arrange(id, doy) %>% 
-  dplyr::select(legid, X, Y)
+  left_join(dat)  %>% 
+  dplyr::select(id, year, season, X, Y) %>% 
+  pivot_wider(id_cols=id:year, names_from=season, values_from=X:Y) %>% 
+  data.frame()
 
-#4. Split into a list----
-dat.s <- group_split(dat.i, legid, .keep=FALSE)
-names(dat.s) <- unique(dat.i$legid)
+#5. KDE with incomplete data clustering----
+clusters <- c(2:10)
 
-#5. Cluster----
-clust.s <- tsclust(dat.s, k = 2L:9L,
-                   distance = "dtw_basic", centroid = "pam",
-                   seed = 94L)
-names(clust.s) <- paste0("k_", 2L:9L)
+kde.cluster <- list()
+for(j in 1:length(clusters)){
+  
+  dat.j <- dat.i %>% 
+    dplyr::select(-id, -year)
+  kde.j <- ClustImpute(dat.j, clusters[j], nr_iter=100)
+  kde.cluster[[j]] <- data.frame(clusters = kde.j$clusters,
+                                 nclust = clusters[j],
+                                 id = dat.i$id,
+                                 year = dat.i$year)
+  
+}
 
-#6. Apply clusters to data----
-dat.clust <- data.frame(legid = unique(dat.i$legid),
-                        clust2 = clust.s$k_2@cluster,
-                        clust3 = clust.s$k_3@cluster,
-                        clust4 = clust.s$k_4@cluster,
-                        clust5 = clust.s$k_5@cluster,
-                        clust6 = clust.s$k_6@cluster,
-                        clust7 = clust.s$k_7@cluster,
-                        clust8 = clust.s$k_8@cluster,
-                        clust9 = clust.s$k_9@cluster) %>% 
-  full_join(dat.i) %>% 
-  left_join(dat.raw)
+dat.kde <- rbindlist(kde.cluster) %>% 
+  pivot_wider(id_cols=id:year, names_from=nclust, values_from=clusters, names_prefix="kde_") %>% 
+  left_join(dat) %>% 
+  pivot_longer(names_to="nclust", values_to="kdecluster", cols=kde_2:kde_10, names_prefix="kde_") %>% 
+  mutate(nclust = as.numeric(nclust))
 
-#7. Visualize----
-ggplot(dat.clust) +
-  geom_line(data=dat.i, aes(x=X, y=Y, group=legid)) +
-  geom_point(aes(x=X, y=Y, colour=factor(clust4)))
+#6. Visualize----
+ggplot(dat.kde) +
+  geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
+  facet_grid(season ~ nclust)
 
-ggplot(dat.clust) +
-#  geom_line(data=dat.i, aes(x=X, y=Y, group=legid)) +
-  geom_point(aes(x=X, y=Y, colour=factor(clust4))) + 
-  facet_wrap(~season)
+ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
+
+#7. Save clusters----
+write.csv(dat.kde, "Data/LBCUKDEClusters.csv", row.names=FALSE)
+
