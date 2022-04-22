@@ -1,9 +1,12 @@
 library(tidyverse)
-library(ppclust)
+library(class)
 library(sf)
 library(data.table)
+library(adehabitatHR)
 
 options(scipen=9999)
+
+#TO DO: FIGURE OUT KNN HYPERPARAMETER####
 
 #1. Import tracking data with training clusters----
 track.raw <- read.csv("Data/LBCUKDEClusters.csv") %>% 
@@ -33,9 +36,10 @@ bbs.sf <- routes %>%
          type="bbs")
 
 #3. Set up loop through # of clusters---
-clusters <- c(2:10)
+clusters <- c(2:6,8:9)
 
-fcm.out <- list()
+knn.out <- list()
+knn.area <- data.frame()
 for(j in 1:length(clusters)){
   
   #4. Wrangle tracking data----
@@ -44,58 +48,43 @@ for(j in 1:length(clusters)){
                   season=="breed")
   
   #5. Put together with BBS data----
-  dat.j <- track.j %>% 
-    dplyr::select(id, X, Y, type) %>% 
-    rbind(bbs.sf %>% 
-            dplyr::select(id, X, Y, type))
-  
-  #6. Create membership matrix with known membership for tracking data and unknown for bbs----
-  mem.j <- track.j %>% 
-    mutate(value = 1) %>% 
-    pivot_wider(id_cols=id, names_from=kdecluster, values_from=value, values_fill=0) %>% 
-    dplyr::select(-id) %>% 
-    data.frame() %>% 
-    rbind(expand.grid(id=bbs.sf$id, kdecluster=rep(seq(1, clusters[j], 1))) %>% 
-            mutate(value=1/clusters[j]) %>% 
-            pivot_wider(id_cols=id, names_from=kdecluster, values_from=value) %>% 
-            dplyr::select(-id) %>% 
-            data.frame())
+  bbs.j <- bbs.sf %>% 
+            dplyr::select(id, X, Y, type)
 
   #7. Fuzzy c-means cluster with cluster id as initial membership #----
-  fcm.j <- fcm(dat.j[,c("X", "Y")], centers=clusters[j], memberships=mem.j)
+  knn.j <- knn(train=track.j[,c("X", "Y")], test=bbs.j[,c("X", "Y")], cl=track.j$kdecluster, k=1, prob=TRUE)
 
-  #8. Keep fcm membership of each BBS route and tracking data point----
-  fcm.out[[j]] <- dat.j %>% 
-    mutate(fcmcluster=fcm.j$cluster,
-           nclust=clusters[j])
+  #8. Keep knn membership of each BBS route and tracking data point----
+  knn.out[[j]] <- data.frame(knncluster=knn.j,
+                        knnprob=attr(knn.j, "prob"),
+                        nclust=clusters[j]) %>% 
+    cbind(bbs.j)
+  
+  #9. Calculate MCP area for BBSbayes-----
+  sp.j <- SpatialPointsDataFrame(coords=cbind(bbs.j$X, bbs.j$Y), 
+                                   data=data.frame(ID=knn.j),
+                                   proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+  
+  mp.j <- mcp(sp.j[,1], percent=100)
+  
+  knn.area <- data.frame(mp.j) %>% 
+    rename(knncluster=id) %>% 
+    mutate(nclust=clusters[j]) %>% 
+    rbind(knn.area)
   
   print(paste0("Finished cluster ", clusters[j], " of ", length(clusters)))
   
 }
 
-#9. Collapse the results----
-fcm.all <- rbindlist(fcm.out)
-
-#10. Check for agreement with kde for tracking data----
-fcm.track <- fcm.all %>% 
-  dplyr::filter(type=="track") %>% 
-  left_join(track.raw %>% 
-              dplyr::filter(season=="breed") %>% 
-              mutate(id=as.character(id)))
-
-cor.test(fcm.track$fcmcluster, fcm.track$kdecluster)
-
-ggplot(fcm.track) +
-  geom_point(aes(x=kdecluster, y=fcmcluster)) +
-  facet_wrap(~nclust)
+#10. Collapse the results----
+knn.all <- rbindlist(knn.out)
 
 #11. Visualize----
-ggplot(fcm.all) +
-  geom_point(aes(x=X, y=Y, colour=factor(fcmcluster), pch=type)) +
-  geom_point(data=fcm.track, aes(x=X, y=Y, colour=factor(kdecluster)), size=5, alpha=0.5) +
+ggplot(knn.all) +
+  geom_point(aes(x=X, y=Y, colour=factor(knncluster))) +
+  geom_point(data=filter(track.raw, season=="breed"), aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white") +
   facet_wrap(~nclust)
 
-#NOPE THIS DIDN"T WORK AT ALL. REVISIT CLASSIFICATION
-
 #12. Save out----
-fcm <- rbindlist(fcm.out)
+write.csv(knn.all, "LBCUBBSClusters.csv", row.names = FALSE)
+write.csv(knn.area, "area_weight.csv", row.names = FALSE)
