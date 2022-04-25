@@ -9,8 +9,7 @@ options(scipen=9999)
 #TO DO: FIGURE OUT KNN HYPERPARAMETER####
 
 #1. Import tracking data with training clusters----
-track.raw <- read.csv("Data/LBCUKDEClusters.csv") %>% 
-  mutate(type = "track") 
+track.raw <- read.csv("Data/LBCUKDEClusters.csv")
 
 #2. Import bbs monitoring data----
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
