@@ -1,5 +1,3 @@
-#https://bookdown.org/adam_smith2/bbsbayes_intro_workshop/
-
 library(tidyverse)
 library(data.table)
 library(vegan)
@@ -22,7 +20,7 @@ bbs <- read.csv("Data/LBCUClusterTrends.csv")
 clusters <- c(2:5,6,8:9)
 
 mantel.list <- list()
-mc.list <- list()
+mc.df <- data.frame()
 for(j in 1:length(clusters)){
   
   #3. Wrangle data----
@@ -38,7 +36,7 @@ for(j in 1:length(clusters)){
     dplyr::filter(season=="fallmig",
                   nclust==clusters[j])
   
-  fall.j <- dat %>% 
+  spring.j <- dat %>% 
     dplyr::filter(season=="springmig",
                   nclust==clusters[j])
   
@@ -51,68 +49,164 @@ for(j in 1:length(clusters)){
   bf.j <- rbind(breed.j, fall.j) %>% 
     dplyr::select(id, kdecluster, X, Y, season) %>% 
     pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
-    dplyr::filter(!is.na(X_fall) & !is.na(X_breed)) %>% 
+    dplyr::filter(!is.na(X_fallmig) & !is.na(X_breed)) %>% 
     rename(bird=id)
   
   bs.j <- rbind(breed.j, spring.j) %>% 
     dplyr::select(id, kdecluster, X, Y, season) %>% 
     pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
-    dplyr::filter(!is.na(X_spring) & !is.na(X_breed)) %>% 
+    dplyr::filter(!is.na(X_springmig) & !is.na(X_breed)) %>% 
     rename(bird=id)
   
   #4. Calculate mantel within regions----
-  k.list <- list()
+  mantel.df <- data.frame()
   for(k in 1:clusters[j]){
     
+    #Winter
     bw.k <- bw.j %>% 
       dplyr::filter(kdecluster==k)
 
-    b.k <- bw.k %>% 
+    bwb.k <- bw.k %>% 
       dplyr::select(X_breed, Y_breed) %>% 
       vegdist("euclidean")
     
-    w.k <- bw.k %>% 
+    bww.k <- bw.k %>% 
       dplyr::select(X_winter, Y_winter) %>% 
       vegdist("euclidean")
+
+    mantelbw.k <- try(mantel(bwb.k, bww.k))
     
-    mantel.k <- mantel(b.k, w.k)
+    if(class(mantelbw.k)=="mantel"){
+      mantel.df <- data.frame(r = mantelbw.k[["statistic"]],
+                                p = mantelbw.k[["signif"]],
+                                n=nrow(bw.k),
+                                kdecluster = k,
+                                nclust=clusters[j],
+                                season="winter") %>% 
+        rbind(mantel.df)
+    }
+
     
-    k.list[[k]] <- data.frame(r = mantel.k[["statistic"]],
-                              p = mantel.k[["signif"]],
-                              n=nrow(bw.k),
+    #Fallmig
+    bf.k <- bf.j %>% 
+      dplyr::filter(kdecluster==k)
+    
+    bfb.k <- bf.k %>% 
+      dplyr::select(X_breed, Y_breed) %>% 
+      vegdist("euclidean")
+    
+    bff.k <- bf.k %>% 
+      dplyr::select(X_fallmig, Y_fallmig) %>% 
+      vegdist("euclidean")
+    
+    mantelbf.k <- try(mantel(bfb.k, bff.k))
+
+    if(class(mantelbf.k)=="mantel"){
+      mantel.df <- data.frame(r = mantelbf.k[["statistic"]],
+                              p = mantelbf.k[["signif"]],
+                              n=nrow(bf.k),
                               kdecluster = k,
-                              nclust=clusters[j])
+                              nclust=clusters[j],
+                              season="fallmig") %>% 
+        rbind(mantel.df)
+    }
     
+    #Springmig
+    bs.k <- bs.j %>% 
+      dplyr::filter(kdecluster==k)
+    
+    bsb.k <- bs.k %>% 
+      dplyr::select(X_breed, Y_breed) %>% 
+      vegdist("euclidean")
+    
+    bss.k <- bs.k %>% 
+      dplyr::select(X_springmig, Y_springmig) %>% 
+      vegdist("euclidean")
+    
+    mantelbs.k <- try(mantel(bsb.k, bss.k))
+    
+    if(class(mantelbs.k)=="mantel"){
+      mantel.df <- data.frame(r = mantelbs.k[["statistic"]],
+                              p = mantelbs.k[["signif"]],
+                              n=nrow(bs.k),
+                              kdecluster = k,
+                              nclust=clusters[j],
+                              season="springmig") %>% 
+        rbind(mantel.df)
+    }
   }
-  mantel.list[[j]] <- rbindlist(k.list)
+  mantel.list[[j]] <- mantel.df
   
-  #5. Set up target grid for MC estimation----
-  pts.utm <- st_as_sf(bw.j, coords=c("X_winter", "Y_winter"), crs=3857) %>% 
+  #5. Set up target grids for MC estimation----
+  
+  #Winter
+  ptsw <- st_as_sf(bw.j, coords=c("X_winter", "Y_winter"), crs=3857) %>% 
     as_Spatial()
   
-  bb <- bbox(pts.utm)
+  bb <- bbox(ptsw)
   cs <- c(100000, 100000)  # cell size 
   cc <- bb[, 1] + (cs/2)  # cell offset
   cd <- ceiling(diff(t(bb))/cs)  # number of cells per direction
   grd <- GridTopology(cellcentre.offset=cc, cellsize=cs, cells.dim=cd)
-  spgrd <- SpatialGridDataFrame(grd,
+  spgrdw <- SpatialGridDataFrame(grd,
                                 data=data.frame(id=1:prod(cd)),
-                                proj4string=CRS(proj4string(pts.utm)))
+                                proj4string=CRS(proj4string(ptsw)))
   
-  plot(spgrd)
-  plot(pts.utm, add=TRUE)
-  
-  id.j <- bw.j %>% 
+  idw.j <- bw.j %>% 
     rename(breed_id=kdecluster) %>% 
-    cbind(id=over(pts.utm, spgrd)) %>% 
+    cbind(id=over(ptsw, spgrdw)) %>% 
     dplyr::rename(winter_id=id)
   
+  #Fall
+  ptsf <- st_as_sf(bf.j, coords=c("X_fallmig", "Y_fallmig"), crs=3857) %>% 
+    as_Spatial()
+  
+  bb <- bbox(ptsf)
+  cs <- c(100000, 100000)  # cell size 
+  cc <- bb[, 1] + (cs/2)  # cell offset
+  cd <- ceiling(diff(t(bb))/cs)  # number of cells per direction
+  grd <- GridTopology(cellcentre.offset=cc, cellsize=cs, cells.dim=cd)
+  spgrdf <- SpatialGridDataFrame(grd,
+                                data=data.frame(id=1:prod(cd)),
+                                proj4string=CRS(proj4string(ptsf)))
+
+  idf.j <- bf.j %>% 
+    rename(breed_id=kdecluster) %>% 
+    cbind(id=over(ptsf, spgrdf)) %>% 
+    dplyr::rename(fallmig_id=id)
+  
+  #Spring
+  ptss <- st_as_sf(bs.j, coords=c("X_springmig", "Y_springmig"), crs=3857) %>% 
+    as_Spatial()
+  
+  bb <- bbox(ptss)
+  cs <- c(100000, 100000)  # cell size 
+  cc <- bb[, 1] + (cs/2)  # cell offset
+  cd <- ceiling(diff(t(bb))/cs)  # number of cells per direction
+  grd <- GridTopology(cellcentre.offset=cc, cellsize=cs, cells.dim=cd)
+  spgrds <- SpatialGridDataFrame(grd,
+                                data=data.frame(id=1:prod(cd)),
+                                proj4string=CRS(proj4string(ptss)))
+  
+  ids.j <- bs.j %>% 
+    rename(breed_id=kdecluster) %>% 
+    cbind(id=over(ptss, spgrds)) %>% 
+    dplyr::rename(springmig_id=id)
+  
   #6. Number of regions----
-  nb <- length(unique(id.j$breed_id))
-  nw <- length(unique(id.j$winter_id))
+  nwb <- length(unique(idw.j$breed_id))
+  nww <- length(unique(idw.j$winter_id))
+  
+  nfb <- length(unique(idf.j$breed_id))
+  nff <- length(unique(idf.j$fallmig_id))
+  
+  nsb <- length(unique(ids.j$breed_id))
+  nss <- length(unique(ids.j$springmig_id))
   
   #7. Distance matrices between centroids----
-  distb.j <- id.j %>% 
+  
+  #winter
+  distwb.j <- idw.j %>% 
     group_by(breed_id) %>% 
     summarize(X=mean(X_breed),
               Y=mean(Y_breed)) %>% 
@@ -121,9 +215,9 @@ for(j in 1:length(clusters)){
     dplyr::select(X, Y) %>% 
     data.frame() %>% 
     distFromPos("plane")
-  dimnames(distb.j) <- list(sort(unique(id.j$breed_id)), sort(unique(id.j$breed_id)))
+  dimnames(distwb.j) <- list(sort(unique(idw.j$breed_id)), sort(unique(idw.j$breed_id)))
   
-  distw.j <- id.j %>% 
+  distww.j <- idw.j %>% 
     group_by(winter_id) %>% 
     summarize(X=mean(X_winter),
               Y=mean(Y_winter)) %>% 
@@ -132,40 +226,147 @@ for(j in 1:length(clusters)){
     dplyr::select(X, Y) %>% 
     data.frame() %>% 
     distFromPos("plane")
-  dimnames(distw.j) <- list(sort(unique(id.j$winter_id)), sort(unique(id.j$winter_id)))
+  dimnames(distww.j) <- list(sort(unique(idw.j$winter_id)), sort(unique(idw.j$winter_id)))
   
-  #8. Create sp objects for individual locations----
-  ptb.j <- id.j %>% 
+  #fall
+  distfb.j <- idf.j %>% 
+    group_by(breed_id) %>% 
+    summarize(X=mean(X_breed),
+              Y=mean(Y_breed)) %>% 
+    ungroup() %>% 
+    arrange(breed_id) %>% 
+    dplyr::select(X, Y) %>% 
+    data.frame() %>% 
+    distFromPos("plane")
+  dimnames(distfb.j) <- list(sort(unique(idf.j$breed_id)), sort(unique(idf.j$breed_id)))
+  
+  distff.j <- idf.j %>% 
+    group_by(fallmig_id) %>% 
+    summarize(X=mean(X_fallmig),
+              Y=mean(Y_fallmig)) %>% 
+    ungroup() %>% 
+    arrange(fallmig_id) %>% 
+    dplyr::select(X, Y) %>% 
+    data.frame() %>% 
+    distFromPos("plane")
+  dimnames(distff.j) <- list(sort(unique(idf.j$fallmig_id)), sort(unique(idf.j$fallmig_id)))
+  
+  #spring
+  distsb.j <- ids.j %>% 
+    group_by(breed_id) %>% 
+    summarize(X=mean(X_breed),
+              Y=mean(Y_breed)) %>% 
+    ungroup() %>% 
+    arrange(breed_id) %>% 
+    dplyr::select(X, Y) %>% 
+    data.frame() %>% 
+    distFromPos("plane")
+  dimnames(distsb.j) <- list(sort(unique(ids.j$breed_id)), sort(unique(ids.j$breed_id)))
+  
+  distss.j <- ids.j %>% 
+    group_by(springmig_id) %>% 
+    summarize(X=mean(X_springmig),
+              Y=mean(Y_springmig)) %>% 
+    ungroup() %>% 
+    arrange(springmig_id) %>% 
+    dplyr::select(X, Y) %>% 
+    data.frame() %>% 
+    distFromPos("plane")
+  dimnames(distss.j) <- list(sort(unique(ids.j$springmig_id)), sort(unique(ids.j$springmig_id)))
+  
+  #8. Create point objects for individual locations----
+  
+  #Winter
+  ptwb.j <- idw.j %>% 
     st_as_sf(coords=c("X_breed", "Y_breed"), crs=3857) %>% 
     dplyr::select(geometry)
   
-  ptw.j <- id.j %>% 
+  ptww.j <- idw.j %>% 
     st_as_sf(coords=c("X_winter", "Y_winter"), crs=3857) %>% 
     dplyr::select(geometry)
   
+  #fall
+  ptfb.j <- idf.j %>% 
+    st_as_sf(coords=c("X_breed", "Y_breed"), crs=3857) %>% 
+    dplyr::select(geometry)
+  
+  ptff.j <- idf.j %>% 
+    st_as_sf(coords=c("X_fallmig", "Y_fallmig"), crs=3857) %>% 
+    dplyr::select(geometry)
+  
+  #Winter
+  ptsb.j <- ids.j %>% 
+    st_as_sf(coords=c("X_breed", "Y_breed"), crs=3857) %>% 
+    dplyr::select(geometry)
+  
+  ptss.j <- ids.j %>% 
+    st_as_sf(coords=c("X_springmig", "Y_springmig"), crs=3857) %>% 
+    dplyr::select(geometry)
+  
   #9. Create breeding region polygons----
-  sp.j <- SpatialPointsDataFrame(coords=cbind(id.j$X_breed, id.j$Y_breed), 
-                                 data=data.frame(ID=id.j$breed_id),
+  
+  #Winter
+  spw.j <- SpatialPointsDataFrame(coords=cbind(idw.j$X_breed, idw.j$Y_breed), 
+                                 data=data.frame(ID=idw.j$breed_id),
                                  proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
   
-  sitesb.j <- mcp(sp.j[,1], percent=30) %>% 
+  siteswb.j <- try(mcp(spw.j[,1], percent=30) %>% 
     st_as_sf() %>% 
-    dplyr::select(geometry)
-  plot(sitesb.j)
+    dplyr::select(geometry))
+  
+  #Fall
+  spf.j <- SpatialPointsDataFrame(coords=cbind(idf.j$X_breed, idf.j$Y_breed), 
+                                  data=data.frame(ID=idf.j$breed_id),
+                                  proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+  
+  sitesfb.j <- try(mcp(spf.j[,1], percent=30) %>% 
+    st_as_sf() %>% 
+    dplyr::select(geometry))
+  
+  #spring
+  sps.j <- SpatialPointsDataFrame(coords=cbind(ids.j$X_breed, ids.j$Y_breed), 
+                                  data=data.frame(ID=ids.j$breed_id),
+                                  proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+  
+  sitessb.j <- try(mcp(sps.j[,1], percent=30) %>% 
+    st_as_sf() %>% 
+    dplyr::select(geometry))
 
   #10. Create winter region polygons----
-  sitesw.j <- spgrd %>% 
+  
+  #Winter
+  sitesww.j <- spgrdw %>% 
     raster() %>% 
     rasterToPolygons() %>% 
     st_as_sf() %>% 
-    dplyr::filter(id %in% unique(id.j$winter_id)) %>% 
+    dplyr::filter(id %in% unique(idw.j$winter_id)) %>% 
+    dplyr::select(geometry)
+  
+  #Fall
+  sitesff.j <- spgrdf %>% 
+    raster() %>% 
+    rasterToPolygons() %>% 
+    st_as_sf() %>% 
+    dplyr::filter(id %in% unique(idf.j$fallmig_id)) %>% 
+    dplyr::select(geometry)
+  
+  #Spring
+  sitesss.j <- spgrds %>% 
+    raster() %>% 
+    rasterToPolygons() %>% 
+    st_as_sf() %>% 
+    dplyr::filter(id %in% unique(ids.j$springmig_id)) %>% 
     dplyr::select(geometry)
   
   #11. Add relative abundance----
-  abun.j <- rep(1/nb, nb)
+  abunw.j <- rep(1/nwb, nwb)
+  abunf.j <- rep(1/nfb, nfb)
+  abuns.j <- rep(1/nsb, nsb)
   
   #12. Define tag type----
-  gl.j <- rep(FALSE, nrow(id.j))
+  glw.j <- rep(FALSE, nrow(idw.j))
+  glf.j <- rep(FALSE, nrow(idf.j))
+  gls.j <- rep(FALSE, nrow(ids.j))
   
   #13. Define error----
   LongError <- rnorm(100, 20, 5)
@@ -175,44 +376,104 @@ for(j in 1:length(clusters)){
   geo.vcov <- vcov(geo.error.model)
   
   #14. Estimate MC----
-  set.seed(1234)
-  mc.j <-try(estMC(originDist = distb.j, 
-               targetDist = distw.j, 
-               originSites = sitesb.j, 
-               targetSites = sitesw.j, 
-               originPoints = ptb.j,
-               targetPoints = ptw.j,
-               nSamples = 100,
-               isGL = gl.j,
-               geoBias = geo.bias,
-               geoVCov = geo.vcov,
-               originRelAbund = abun.j,
-               verbose = 1))
   
-  if (class(mc.j)[1]=="estMC"){
-
-    mc.list[[j]] <-  data.frame(MC = mc.j$MC$mean,
-                                MClow = mc.j$MC$simpleCI[1],
-                                MChigh = mc.j$MC$simpleCI[2],
-                                nclust=clusters[j])
+  #Winter
+  if(class(siteswb.j)[1]=="sf"){
+    set.seed(1234)
+    mcw.j <-try(estMC(originDist = distwb.j, 
+                      targetDist = distww.j, 
+                      originSites = siteswb.j, 
+                      targetSites = sitesww.j, 
+                      originPoints = ptwb.j,
+                      targetPoints = ptww.j,
+                      nSamples = 10,
+                      isGL = glw.j,
+                      geoBias = geo.bias,
+                      geoVCov = geo.vcov,
+                      originRelAbund = abunw.j,
+                      verbose = 1))
+    
+    if (class(mcw.j)[1]=="estMC"){
+      
+      mc.df <-  data.frame(MC = mcw.j$MC$mean,
+                           MClow = mcw.j$MC$simpleCI[1],
+                           MChigh = mcw.j$MC$simpleCI[2],
+                           nclust=clusters[j],
+                           season="winter") %>% 
+        rbind(mc.df)
+    }
+    
   }
 
+  #Fall
+  if(class(sitesfb.j)[1]=="sf"){
+    
+    mcf.j <-try(estMC(originDist = distfb.j, 
+                      targetDist = distff.j, 
+                      originSites = sitesfb.j, 
+                      targetSites = sitesff.j, 
+                      originPoints = ptfb.j,
+                      targetPoints = ptff.j,
+                      nSamples = 10,
+                      isGL = glf.j,
+                      geoBias = geo.bias,
+                      geoVCov = geo.vcov,
+                      originRelAbund = abunf.j,
+                      verbose = 1))
+    
+    if (class(mcf.j)[1]=="estMC"){
+      
+      mc.df <-  data.frame(MC = mcf.j$MC$mean,
+                           MClow = mcf.j$MC$simpleCI[1],
+                           MChigh = mcf.j$MC$simpleCI[2],
+                           nclust=clusters[j],
+                           season="fallmig") %>% 
+        rbind(mc.df)
+    }
+    
+  }
+  
+  #Spring
+  if(class(sitessb.j)[1]=="sf"){
+    
+    mcs.j <-try(estMC(originDist = distsb.j, 
+                      targetDist = distss.j, 
+                      originSites = sitessb.j, 
+                      targetSites = sitesss.j, 
+                      originPoints = ptsb.j,
+                      targetPoints = ptss.j,
+                      nSamples = 10,
+                      isGL = gls.j,
+                      geoBias = geo.bias,
+                      geoVCov = geo.vcov,
+                      originRelAbund = abuns.j,
+                      verbose = 1))
+    
+    if (class(mcs.j)[1]=="estMC"){
+      
+      mc.df <-  data.frame(MC = mcs.j$MC$mean,
+                           MClow = mcs.j$MC$simpleCI[1],
+                           MChigh = mcs.j$MC$simpleCI[2],
+                           nclust=clusters[j],
+                           season="springmig") %>% 
+        rbind(mc.df)
+    }
+  }
 }
 
 #15. Collapse & summarize results----
 mantel <- rbindlist(mantel.list)
 mantel.sum <- mantel %>% 
-  group_by(nclust) %>% 
+  group_by(nclust, season) %>% 
   summarize(mean=mean(r),
             sd=sd(r))
 
-mc <- rbindlist(mc.list)
-
-results <- full_join(mc, mantel)
-sum <- full_join(mc, mantel.sum)
+results <- full_join(mc.df, mantel)
+sum <- full_join(mc.df, mantel.sum)
 
 ggplot(sum) +
-  geom_point(aes(x=MC, y=mean, colour=factor(nclust)), size=5)
+  geom_point(aes(x=MC, y=mean, colour=factor(nclust)), size=5) +
+  facet_wrap(~season)
 
 #16. Save results----
 write.csv(results, "LBCUMigConnectivity.csv")
