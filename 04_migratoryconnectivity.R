@@ -2,7 +2,12 @@
 
 library(tidyverse)
 library(data.table)
+library(vegan)
 library(adehabitatHR)
+library(sf)
+library(sp)
+library(raster)
+library(MigConnectivity)
 
 #TO DO: REPLACE RELATIVE ABUNDANCE WITH BBS RESULTS####
 #TO DO: THINK ABOUT WHETHER TO ALSO DO STOPOVERS####
@@ -14,9 +19,10 @@ dat <- read.csv("Data/LBCUKDEClusters.csv")
 bbs <- read.csv("Data/LBCUClusterTrends.csv")
 
 #2. Set up loop through # of clusters---
-clusters <- c(2:6,8:9)
+clusters <- c(2:5,6,8:9)
 
 mantel.list <- list()
+mc.list <- list()
 for(j in 1:length(clusters)){
   
   #3. Wrangle data----
@@ -28,10 +34,30 @@ for(j in 1:length(clusters)){
     dplyr::filter(season=="winter",
                   nclust==clusters[j])
   
+  fall.j <- dat %>% 
+    dplyr::filter(season=="fallmig",
+                  nclust==clusters[j])
+  
+  fall.j <- dat %>% 
+    dplyr::filter(season=="springmig",
+                  nclust==clusters[j])
+  
   bw.j <- rbind(breed.j, winter.j) %>% 
     dplyr::select(id, kdecluster, X, Y, season) %>% 
     pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
     dplyr::filter(!is.na(X_winter) & !is.na(X_breed)) %>% 
+    rename(bird=id)
+  
+  bf.j <- rbind(breed.j, fall.j) %>% 
+    dplyr::select(id, kdecluster, X, Y, season) %>% 
+    pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
+    dplyr::filter(!is.na(X_fall) & !is.na(X_breed)) %>% 
+    rename(bird=id)
+  
+  bs.j <- rbind(breed.j, spring.j) %>% 
+    dplyr::select(id, kdecluster, X, Y, season) %>% 
+    pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
+    dplyr::filter(!is.na(X_spring) & !is.na(X_breed)) %>% 
     rename(bird=id)
   
   #4. Calculate mantel within regions----
@@ -39,7 +65,7 @@ for(j in 1:length(clusters)){
   for(k in 1:clusters[j]){
     
     bw.k <- bw.j %>% 
-      dplyr::filter(kdecluster==k) %>% 
+      dplyr::filter(kdecluster==k)
 
     b.k <- bw.k %>% 
       dplyr::select(X_breed, Y_breed) %>% 
@@ -124,7 +150,7 @@ for(j in 1:length(clusters)){
   
   sitesb.j <- mcp(sp.j[,1], percent=30) %>% 
     st_as_sf() %>% 
-    st_geometry()
+    dplyr::select(geometry)
   plot(sitesb.j)
 
   #10. Create winter region polygons----
@@ -133,8 +159,7 @@ for(j in 1:length(clusters)){
     rasterToPolygons() %>% 
     st_as_sf() %>% 
     dplyr::filter(id %in% unique(id.j$winter_id)) %>% 
-    st_geometry() %>% 
-    as_Spatial()
+    dplyr::select(geometry)
   
   #11. Add relative abundance----
   abun.j <- rep(1/nb, nb)
@@ -150,28 +175,44 @@ for(j in 1:length(clusters)){
   geo.vcov <- vcov(geo.error.model)
   
   #14. Estimate MC----
-  mc.j <-estMC(originDist = distb.j, 
+  set.seed(1234)
+  mc.j <-try(estMC(originDist = distb.j, 
                targetDist = distw.j, 
                originSites = sitesb.j, 
                targetSites = sitesw.j, 
                originPoints = ptb.j,
                targetPoints = ptw.j,
-               nSamples = 1000,
+               nSamples = 100,
                isGL = gl.j,
                geoBias = geo.bias,
                geoVCov = geo.vcov,
                originRelAbund = abun.j,
-               verbose = 0)
-
-  results <-  cbind(M = mc.j$meanMC,
-                    Mlow = mc.j$simpleCI[1],
-                    Mhigh = mc.j$simpleCI[2])
-    
+               verbose = 1))
   
+  if (class(mc.j)[1]=="estMC"){
+
+    mc.list[[j]] <-  data.frame(MC = mc.j$MC$mean,
+                                MClow = mc.j$MC$simpleCI[1],
+                                MChigh = mc.j$MC$simpleCI[2],
+                                nclust=clusters[j])
+  }
+
 }
 
+#15. Collapse & summarize results----
 mantel <- rbindlist(mantel.list)
 mantel.sum <- mantel %>% 
   group_by(nclust) %>% 
   summarize(mean=mean(r),
             sd=sd(r))
+
+mc <- rbindlist(mc.list)
+
+results <- full_join(mc, mantel)
+sum <- full_join(mc, mantel.sum)
+
+ggplot(sum) +
+  geom_point(aes(x=MC, y=mean, colour=factor(nclust)), size=5)
+
+#16. Save results----
+write.csv(results, "LBCUMigConnectivity.csv")
