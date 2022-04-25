@@ -315,6 +315,11 @@ plot(dat.sf)
 
 dat.sp <- as_Spatial(dat.sf)
 
+ggplot(bw) +
+  geom_point(data=data.frame(st_coordinates(dat.sf)), aes(x=X, y=Y), colour="red") +
+  geom_point(aes(x=X_breed, y=Y_breed))
+
+
 #9. Spatial overlap----
 library(adehabitatHR)
 library(sp)
