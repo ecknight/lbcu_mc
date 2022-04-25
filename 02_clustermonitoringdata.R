@@ -86,5 +86,5 @@ ggplot(knn.all) +
   facet_wrap(~nclust)
 
 #12. Save out----
-write.csv(knn.all, "LBCUBBSClusters.csv", row.names = FALSE)
-write.csv(knn.area, "area_weight.csv", row.names = FALSE)
+write.csv(knn.all, "Data/LBCUBBSClusters.csv", row.names = FALSE)
+write.csv(knn.area, "Data/area_weight.csv", row.names = FALSE)
