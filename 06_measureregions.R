@@ -24,7 +24,8 @@ kd <- kernelUD(dat.sp, grid = 1000, extent=2, h="href", same4all=FALSE)
 kd.area <- getverticeshr(kd, percent=95, unin="m", unout="km2") %>% 
   st_as_sf() %>% 
   mutate(rad = sqrt(area/3.14)) %>% 
-  separate(id, into=c("season", "kdecluster"), remove=FALSE)
+  separate(id, into=c("season", "kdecluster"), remove=FALSE) %>% 
+  mutate(kdecluster =as.numeric(kdecluster))
 
 #6. Get centroids----
 kd.cen <- getverticeshr(kd, percent=0.1, unin="m", unout="km2") %>% 
@@ -61,3 +62,5 @@ ggplot() +
 #using centroids with a gaussian filter may cause high spatial overlap (but does that matter?)
   
 #9. Save out the two options for GEE----
+write_sf(kd.area, "Data/LBCURegions_KDE.shp")
+write_sf(kd.buff, "Data/LBCURegions_Buffer.shp")
