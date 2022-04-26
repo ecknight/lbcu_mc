@@ -15,7 +15,7 @@ load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
 #3. Set up loop through # of clusters---
 clusters <- c(2:6,8:9)
 
-for(j in 2:length(clusters)){
+for(j in 3:length(clusters)){
   
   if(j==1){
     trend.list <- data.frame
@@ -67,8 +67,8 @@ for(j in 2:length(clusters)){
                         parameters_to_save = c("n","n3"))
   mod.j$stratify_by <- "cluster"
   
-  #write_rds(mod.j, paste0("bbsBayesModels/LBCU_cluster", clusters[j],"_gamye.rds"))
-  mod.j <- read_rds(paste0("bbsBayesModels/LBCU_cluster", clusters[j],"_gamye.rds"))
+  write_rds(mod.j, paste0("bbsBayesModels/LBCU_cluster", clusters[j],"_gamye.rds"))
+  #mod.j <- read_rds(paste0("bbsBayesModels/LBCU_cluster", clusters[j],"_gamye.rds"))
   
   #6. Create annual indices----
   all_area_weights <- utils::read.csv("Data/area_weight.csv") %>% 
