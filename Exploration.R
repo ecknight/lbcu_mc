@@ -454,11 +454,15 @@ ggplot(bmw) +
 ggplot(bmw) +
   geom_point(aes(x=X_winter_1, y=Y_winter_1, colour=factor(cluster4)), show.legend = FALSE)
 
+#Plot each season----
+dat <- read.csv("Data/LBCUKDEClusters.csv")
 
+ggplot(dat) +
+  geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
+  facet_grid(nclust ~ season)
 
+bbs <- read.csv("Data/LBCUBBSClusters.csv")
 
-
-
-
-#12. Trying to get MC to work----
-library(MigConnectivity)
+ggplot(bbs) + 
+  geom_point(aes(x=X, y=Y, colour=factor(knncluster))) + 
+  facet_wrap(~nclust)
