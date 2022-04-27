@@ -100,5 +100,10 @@ for(j in 3:length(clusters)){
   
 }
 
-
+#9. Plot----
+ggplot(trend.list) +
+  geom_point(aes(x=Region_alt, y=Trend)) +
+  geom_errorbar(aes(x=Region_alt, ymin=Trend_Q0.025, ymax=Trend_Q0.975)) +
+  geom_hline(aes(yintercept=0)) +
+  facet_wrap(~nclust)
   
