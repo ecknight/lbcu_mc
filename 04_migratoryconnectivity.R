@@ -16,14 +16,14 @@ dat <- read.csv("Data/LBCUKDEClusters.csv")
 #2. Read in bbsBayes results for relative abundance information----
 bbs <- read.csv("Data/LBCUClusterTrends.csv")
 
-#2. Set up loop through # of clusters---
-clusters <- c(2:5,6,8:9)
+#3. Set up loop through # of clusters---
+clusters <- c(2:6,8:9)
 
 mantel.list <- list()
 mc.df <- data.frame()
 for(j in 1:length(clusters)){
   
-  #3. Wrangle data----
+  #4. Wrangle data----
   breed.j <- dat %>% 
     dplyr::filter(season=="breed",
                   nclust==clusters[j])
@@ -58,7 +58,7 @@ for(j in 1:length(clusters)){
     dplyr::filter(!is.na(X_springmig) & !is.na(X_breed)) %>% 
     rename(bird=id)
   
-  #4. Calculate mantel within regions----
+  #5. Calculate mantel within regions----
   mantel.df <- data.frame()
   for(k in 1:clusters[j]){
     
@@ -137,14 +137,14 @@ for(j in 1:length(clusters)){
   }
   mantel.list[[j]] <- mantel.df
   
-  #5. Set up target grids for MC estimation----
+  #6. Set up target grids for MC estimation----
   
   #Winter
   ptsw <- st_as_sf(bw.j, coords=c("X_winter", "Y_winter"), crs=3857) %>% 
     as_Spatial()
   
   bb <- bbox(ptsw)
-  cs <- c(100000, 100000)  # cell size 
+  cs <- c(500000, 500000)  # cell size 
   cc <- bb[, 1] + (cs/2)  # cell offset
   cd <- ceiling(diff(t(bb))/cs)  # number of cells per direction
   grd <- GridTopology(cellcentre.offset=cc, cellsize=cs, cells.dim=cd)
@@ -162,7 +162,7 @@ for(j in 1:length(clusters)){
     as_Spatial()
   
   bb <- bbox(ptsf)
-  cs <- c(100000, 100000)  # cell size 
+  cs <- c(500000, 500000)  # cell size 
   cc <- bb[, 1] + (cs/2)  # cell offset
   cd <- ceiling(diff(t(bb))/cs)  # number of cells per direction
   grd <- GridTopology(cellcentre.offset=cc, cellsize=cs, cells.dim=cd)
@@ -180,7 +180,7 @@ for(j in 1:length(clusters)){
     as_Spatial()
   
   bb <- bbox(ptss)
-  cs <- c(100000, 100000)  # cell size 
+  cs <- c(500000, 500000)  # cell size 
   cc <- bb[, 1] + (cs/2)  # cell offset
   cd <- ceiling(diff(t(bb))/cs)  # number of cells per direction
   grd <- GridTopology(cellcentre.offset=cc, cellsize=cs, cells.dim=cd)
@@ -193,7 +193,7 @@ for(j in 1:length(clusters)){
     cbind(id=over(ptss, spgrds)) %>% 
     dplyr::rename(springmig_id=id)
   
-  #6. Number of regions----
+  #7. Number of regions----
   nwb <- length(unique(idw.j$breed_id))
   nww <- length(unique(idw.j$winter_id))
   
@@ -203,7 +203,7 @@ for(j in 1:length(clusters)){
   nsb <- length(unique(ids.j$breed_id))
   nss <- length(unique(ids.j$springmig_id))
   
-  #7. Distance matrices between centroids----
+  #8. Distance matrices between centroids----
   
   #winter
   distwb.j <- idw.j %>% 
@@ -274,7 +274,7 @@ for(j in 1:length(clusters)){
     distFromPos("plane")
   dimnames(distss.j) <- list(sort(unique(ids.j$springmig_id)), sort(unique(ids.j$springmig_id)))
   
-  #8. Create point objects for individual locations----
+  #9. Create point objects for individual locations----
   
   #Winter
   ptwb.j <- idw.j %>% 
@@ -303,7 +303,7 @@ for(j in 1:length(clusters)){
     st_as_sf(coords=c("X_springmig", "Y_springmig"), crs=3857) %>% 
     dplyr::select(geometry)
   
-  #9. Create breeding region polygons----
+  #10. Create breeding region polygons----
   
   #Winter
   spw.j <- SpatialPointsDataFrame(coords=cbind(idw.j$X_breed, idw.j$Y_breed), 
@@ -332,7 +332,7 @@ for(j in 1:length(clusters)){
     st_as_sf() %>% 
     dplyr::select(geometry))
 
-  #10. Create winter region polygons----
+  #11. Create winter region polygons----
   
   #Winter
   sitesww.j <- spgrdw %>% 
@@ -358,24 +358,25 @@ for(j in 1:length(clusters)){
     dplyr::filter(id %in% unique(ids.j$springmig_id)) %>% 
     dplyr::select(geometry)
   
-  #11. Add relative abundance----
-  abunw.j <- rep(1/nwb, nwb)
-  abunf.j <- rep(1/nfb, nfb)
-  abuns.j <- rep(1/nsb, nsb)
+  #12. Add relative abundance----
+  bbs.j <- bbs %>% 
+    dplyr::filter(nclust==clusters[j]) %>% 
+    mutate(abun = Relative_Abundance/(sum(Relative_Abundance)))
+  abun.j <- bbs.j$abun
   
-  #12. Define tag type----
+  #13. Define tag type----
   glw.j <- rep(FALSE, nrow(idw.j))
   glf.j <- rep(FALSE, nrow(idf.j))
   gls.j <- rep(FALSE, nrow(ids.j))
   
-  #13. Define error----
+  #14. Define error----
   LongError <- rnorm(100, 20, 5)
   LatError <- rnorm(100, 20, 5)
   geo.error.model <- lm(cbind(LongError,LatError) ~ 1) 
   geo.bias <- coef(geo.error.model)
   geo.vcov <- vcov(geo.error.model)
   
-  #14. Estimate MC----
+  #15. Estimate MC----
   
   #Winter
   if(class(siteswb.j)[1]=="sf"){
@@ -390,7 +391,7 @@ for(j in 1:length(clusters)){
                       isGL = glw.j,
                       geoBias = geo.bias,
                       geoVCov = geo.vcov,
-                      originRelAbund = abunw.j,
+                      originRelAbund = abun.j,
                       verbose = 1))
     
     if (class(mcw.j)[1]=="estMC"){
@@ -418,7 +419,7 @@ for(j in 1:length(clusters)){
                       isGL = glf.j,
                       geoBias = geo.bias,
                       geoVCov = geo.vcov,
-                      originRelAbund = abunf.j,
+                      originRelAbund = abun.j,
                       verbose = 1))
     
     if (class(mcf.j)[1]=="estMC"){
@@ -446,7 +447,7 @@ for(j in 1:length(clusters)){
                       isGL = gls.j,
                       geoBias = geo.bias,
                       geoVCov = geo.vcov,
-                      originRelAbund = abuns.j,
+                      originRelAbund = abun.j,
                       verbose = 1))
     
     if (class(mcs.j)[1]=="estMC"){
@@ -461,7 +462,7 @@ for(j in 1:length(clusters)){
   }
 }
 
-#15. Collapse & summarize results----
+#16. Collapse & summarize results----
 mantel <- rbindlist(mantel.list)
 mantel.sum <- mantel %>% 
   group_by(nclust, season) %>% 
@@ -475,5 +476,13 @@ ggplot(sum) +
   geom_point(aes(x=MC, y=mean, colour=factor(nclust)), size=5) +
   facet_wrap(~season)
 
-#16. Save results----
-write.csv(results, "LBCUMigConnectivity.csv")
+ggplot(sum) +
+  geom_point(aes(x=nclust, y=mean, colour=season)) +
+  geom_smooth(aes(x=nclust, y=mean, colour=season))
+
+ggplot(sum) +
+  geom_point(aes(x=nclust, y=MC, colour=season)) +
+  geom_line(aes(x=nclust, y=MC, colour=season))
+
+#17. Save results----
+write.csv(results, "Data/LBCUMigConnectivity.csv")
