@@ -474,7 +474,11 @@ sum <- full_join(mc.df, mantel.sum)
 
 ggplot(sum) +
   geom_point(aes(x=MC, y=mean, colour=factor(nclust)), size=5) +
-  facet_wrap(~season)
+  facet_wrap(~season) +
+  ylab("Mantel within populations") +
+  xlab("MC between populations")
+
+ggsave(filename="Figs/MC.jpeg", width=10, height=6)
 
 ggplot(sum) +
   geom_point(aes(x=nclust, y=mean, colour=season)) +
