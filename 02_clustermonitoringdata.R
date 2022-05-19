@@ -7,6 +7,8 @@ library(adehabitatHR)
 options(scipen=9999)
 
 #TO DO: FIGURE OUT KNN HYPERPARAMETER####
+#TO DO: FIGURE OUT HOW TO DEAL WITH CLUSTERS THAT CAN'T HAVE MCP RUN ON THEM
+#TO DO: SET UP BOOTSTRAPPING
 
 #1. Import tracking data with training clusters----
 track.raw <- read.csv("Data/LBCUKDEClusters.csv")
@@ -35,7 +37,7 @@ bbs.sf <- routes %>%
          type="bbs")
 
 #3. Set up loop through # of clusters---
-clusters <- c(2:6,8:9)
+clusters <- c(2:9)
 
 knn.out <- list()
 knn.area <- data.frame()
@@ -50,7 +52,7 @@ for(j in 1:length(clusters)){
   bbs.j <- bbs.sf %>% 
             dplyr::select(id, X, Y, type)
 
-  #7. Fuzzy c-means cluster with cluster id as initial membership #----
+  #7. KNN with cluster id as initial membership #----
   knn.j <- knn(train=track.j[,c("X", "Y")], test=bbs.j[,c("X", "Y")], cl=track.j$kdecluster, k=1, prob=TRUE)
 
   #8. Keep knn membership of each BBS route and tracking data point----
