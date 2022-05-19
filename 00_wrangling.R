@@ -6,8 +6,6 @@ library(ggmap)
 
 options(scipen=9999)
 
-#NOTE: This ignores birds with multiple wintering grounds and variation between years for now. We're just interested in broad patterns for exploration
-
 #TO DO: Still need to figure out stopovers > 30 days long####
 
 #1. Read in data and filter out individuals that don't have locations for both seasons
