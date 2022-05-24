@@ -6,18 +6,42 @@ library(sf)
 library(sp)
 library(raster)
 library(MigConnectivity)
+library(ebirdst)
 
-#TO DO: REPLACE RELATIVE ABUNDANCE WITH BBS RESULTS####
-#TO DO: THINK ABOUT WHETHER TO ALSO DO STOPOVERS####
+#TO DO: THINK ABOUT HOW TO PULL MEAN ABUNDANCE FOR CLUSTERS WITHOUT ENOUGH POINTS FOR MCP: PULL MEAN OF POINT VALUES???
 
 #1. Load clusters for BBS routes with LBCU on them----
 dat <- read.csv("Data/LBCUKDEClusters.csv")
 
-#2. Read in bbsBayes results for relative abundance information----
-bbs <- read.csv("Data/LBCUClusterTrends.csv")
+#2. Calculate MCP for each cluster in each season-----
+dat.mcp <- dat  %>% 
+  mutate(clustid = paste(season, nclust, kdecluster, sep="-")) %>% 
+  group_by(clustid) %>% 
+  mutate(n = n()) %>% 
+  ungroup()
+  dplyr::filter(n > 4)
+
+sp <- SpatialPointsDataFrame(coords=cbind(dat.mcp$X, dat.mcp$Y), 
+                               data=data.frame(ID=dat.mcp$clustid),
+                               proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+
+mp <- mcp(sp[,1], percent=100) %>% 
+  st_as_sf() %>% 
+  separate(id, into=c("season", "nclust", "kdecluster"), remove=FALSE)
+
+#3. Extract relative abundance information from eBird----
+set_ebirdst_access_key("e7ld1bagh8n1")
+ebirdst_download("lobcur")
+ebd <- load_raster("/Users/ellyknight/Library/Application Support/ebirdst/lobcur-ERD2019-STATUS-20200930-da308f90", product="abundance_seasonal")
+
+abun <- raster::extract(ebd, mp, fun="mean", na.rm=TRUE)
+
+mp.abun <- mp %>% 
+  dplyr::select(id, season, nclust, kdecluster) %>% 
+  cbind(abun)
 
 #3. Set up loop through # of clusters---
-clusters <- c(2:6,8:9)
+clusters <- c(2:9)
 
 mantel.list <- list()
 mc.df <- data.frame()
@@ -359,9 +383,9 @@ for(j in 1:length(clusters)){
     dplyr::select(geometry)
   
   #12. Add relative abundance----
-  bbs.j <- bbs %>% 
-    dplyr::filter(nclust==clusters[j]) %>% 
-    mutate(abun = Relative_Abundance/(sum(Relative_Abundance)))
+  bbs.j <- mp.abun %>% 
+    dplyr::filter(nclust==clusters[j], season=="breed") %>% 
+    mutate(abun = breeding/(sum(breeding)))
   abun.j <- bbs.j$abun
   
   #13. Define tag type----
