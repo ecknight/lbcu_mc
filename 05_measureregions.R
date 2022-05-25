@@ -8,7 +8,7 @@ n <- 4
 
 #2. Read in clustered tracking data----
 dat <- read.csv("Data/LBCUKDEClusters.csv") %>% 
-  dplyr::filter(nclust==n)
+  dplyr::filter(nclust==n, id!=129945787)
 
 #3. Make sp object----
 dat.sp <- dat %>% 
@@ -21,9 +21,27 @@ dat.sp <- dat %>%
 kd <- kernelUD(dat.sp, grid = 1000, extent=2, h="href", same4all=FALSE)
 
 #5. Calculate area----
-kd.area <- getverticeshr(kd, percent=95, unin="m", unout="km2") %>% 
+kd.95 <- getverticeshr(kd, percent=95, unin="m", unout="km2") %>% 
   st_as_sf() %>% 
   mutate(rad = sqrt(area/3.14)) %>% 
+  separate(id, into=c("season", "kdecluster"), remove=FALSE) %>% 
+  mutate(kdecluster =as.numeric(kdecluster))
+kd.50 <- getverticeshr(kd, percent=50, unin="m", unout="km2") %>% 
+  st_as_sf() %>% 
+  mutate(rad = sqrt(area/3.14)) %>% 
+  separate(id, into=c("season", "kdecluster"), remove=FALSE) %>% 
+  mutate(kdecluster =as.numeric(kdecluster))
+
+mcp.95 <- mcp(dat.sp, percent=95, unin="m", unout="km2") %>% 
+  st_as_sf() %>% 
+  separate(id, into=c("season", "kdecluster"), remove=FALSE) %>% 
+  mutate(kdecluster =as.numeric(kdecluster))
+mcp.75 <- mcp(dat.sp, percent=75, unin="m", unout="km2") %>% 
+  st_as_sf() %>% 
+  separate(id, into=c("season", "kdecluster"), remove=FALSE) %>% 
+  mutate(kdecluster =as.numeric(kdecluster))
+mcp.50 <- mcp(dat.sp, percent=50, unin="m", unout="km2") %>% 
+  st_as_sf() %>% 
   separate(id, into=c("season", "kdecluster"), remove=FALSE) %>% 
   mutate(kdecluster =as.numeric(kdecluster))
 
@@ -45,19 +63,32 @@ bbs <- read.csv("Data/LBCUBBSClusters.csv") %>%
   dplyr::filter(nclust==n) %>% 
   mutate(season="breed")
 
-ggplot() +
-  geom_sf(data=kd.area, aes(fill=factor(kdecluster)), alpha=0.5) +
-#  geom_point(data=dat, aes(x=X, y=Y, colour=factor(kdecluster))) +
-  geom_point(data=bbs, aes(x=X, y=Y, colour=factor(knncluster))) + 
+plot.kde <- ggplot() +
+  geom_sf(data=kd.95, aes(fill=factor(kdecluster)), alpha=0.4) +
+  geom_sf(data=kd.50, aes(fill=factor(kdecluster)), alpha=0.7) +
+  geom_point(data=dat, aes(x=X, y=Y, colour=factor(kdecluster))) +
+#  geom_point(data=bbs, aes(x=X, y=Y, colour=factor(knncluster))) + 
   geom_point(data=kd.cen, aes(x=X, y=Y), colour="black", size=2) +
-  facet_wrap(~season)
+  facet_wrap(~season) +
+  theme(legend.position="none")
 
-ggplot() +
-#  geom_point(data=dat, aes(x=X, y=Y, colour=factor(kdecluster))) +
-  geom_point(data=bbs, aes(x=X, y=Y, colour=factor(knncluster))) + 
+plot.mcp <- ggplot() +
+  geom_sf(data=mcp.95, aes(fill=factor(kdecluster)), alpha=0.4) +
+#  geom_sf(data=mcp.75, aes(fill=factor(kdecluster)), alpha=0.7) +
+    geom_point(data=dat, aes(x=X, y=Y, colour=factor(kdecluster))) +
+  #  geom_point(data=bbs, aes(x=X, y=Y, colour=factor(knncluster))) + 
+  facet_wrap(~season) +
+  theme(legend.position="none")
+
+plot.buff <- ggplot() +
+  geom_point(data=dat, aes(x=X, y=Y, colour=factor(kdecluster))) +
+#  geom_point(data=bbs, aes(x=X, y=Y, colour=factor(knncluster))) + 
   geom_sf(data=kd.buff, aes(fill=factor(kdecluster)), alpha=0.3) +
 #  geom_point(data=kd.cen, aes(x=X, y=Y), colour="black", size=2) +
-  facet_wrap(~season)
+  facet_wrap(~season) +
+  theme(legend.position="none")
+
+grid.arrange(plot.kde, plot.mcp, plot.buff, ncol=3, nrow=1)
 
 #using centroids with a gaussian filter may cause high spatial overlap (but does that matter?)
   
