@@ -4,8 +4,6 @@ library(data.table)
 
 options(scipen=9999)
 
-#TO DO: Pick full years of data for random selection. Or maybe 1 point per season???----
-
 #1. Import data----
 dat.raw <- read.csv("Data/LBCUMCLocations.csv")
 
@@ -44,56 +42,57 @@ dat.n <- dat  %>%
   dplyr::filter(n==2) %>% 
   ungroup()
 
-#4. Pick one year of data for each individual and make it wide----
+#4. Set # of bootstraps & set up loop----
+boot <- 100
+
+dat.kde <- list()
 set.seed(1)
-dat.i <- dat.days %>% 
-  dplyr::filter(id %in% dat.n$id) %>% 
-  dplyr::select(id, year) %>% 
-  unique() %>% 
-  group_by(id) %>% 
-  sample_n(1) %>% 
-  ungroup() %>% 
-  left_join(dat)  %>% 
-  dplyr::select(id, year, season, X, Y) %>% 
-  pivot_wider(id_cols=id:year, names_from=season, values_from=X:Y) %>% 
-  data.frame()
-
-#5. KDE with incomplete data clustering----
-clusters <- c(2:9)
-
-kde.cluster <- list()
-for(j in 1:length(clusters)){
+for(i in 1:boot){
   
-  dat.j <- dat.i %>% 
-    dplyr::select(-id, -year)
-  kde.j <- ClustImpute(dat.j, clusters[j], nr_iter=100)
-  kde.cluster[[j]] <- data.frame(clusters = kde.j$clusters,
-                                 nclust = clusters[j],
-                                 id = dat.i$id,
-                                 year = dat.i$year)
+  #5. Pick one year of data for each individual and make it wide----
+  
+  dat.i <- dat %>% 
+    dplyr::filter(id %in% dat.n$id) %>% 
+    group_by(id, season) %>% 
+    sample_n(1) %>% 
+    ungroup() %>% 
+    dplyr::select(id, season, X, Y) %>% 
+    pivot_wider(id_cols=id, names_from=season, values_from=X:Y) %>% 
+    data.frame()
+  
+  #6. KDE with incomplete data clustering----
+  clusters <- c(2:9)
+  
+  kde.cluster <- list()
+  for(j in 1:length(clusters)){
+    
+    dat.j <- dat.i %>% 
+      dplyr::select(-id)
+    kde.j <- ClustImpute(dat.j, clusters[j], nr_iter=100)
+    kde.cluster[[j]] <- data.frame(clusters = kde.j$clusters,
+                                   nclust = clusters[j],
+                                   id = dat.i$id)
+    
+  }
+  
+  dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
+    pivot_wider(id_cols=id, names_from=nclust, values_from=clusters, names_prefix="kde_") %>% 
+    left_join(dat) %>% 
+    pivot_longer(names_to="nclust", values_to="kdecluster", cols=kde_2:kde_9, names_prefix="kde_") %>% 
+    mutate(nclust = as.numeric(nclust),
+           boot = i)
+  
+  #7. Visualize----
+  # ggplot(dat.kde) +
+  #   geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
+  #   facet_grid(season ~ nclust)
+  # 
+  # ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
+  
+print(paste0("Finished bootstrap ", i, " of ", boot))
   
 }
 
-dat.kde <- rbindlist(kde.cluster) %>% 
-  pivot_wider(id_cols=id:year, names_from=nclust, values_from=clusters, names_prefix="kde_") %>% 
-  left_join(dat) %>% 
-  pivot_longer(names_to="nclust", values_to="kdecluster", cols=kde_2:kde_9, names_prefix="kde_") %>% 
-  mutate(nclust = as.numeric(nclust))
-
-#ensure at least 5 points per cluster
-dat.5 <- dat.kde %>% 
-  group_by(nclust, kdecluster) %>% 
-  summarize(n=n()) %>% 
-  dplyr::filter(n < 5)
-dat.5
-
-#6. Visualize----
-ggplot(dat.kde) +
-  geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
-  facet_grid(season ~ nclust)
-
-ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
-
-#7. Save clusters----
-write.csv(dat.kde, "Data/LBCUKDEClusters.csv", row.names=FALSE)
+#8. Save clusters----
+write.csv(rbindlist(dat.kde), "Data/LBCUKDEClusters.csv", row.names=FALSE)
 
