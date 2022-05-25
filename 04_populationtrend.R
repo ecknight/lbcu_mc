@@ -8,7 +8,7 @@ library(gridExtra)
 source("functions.R")
 
 #1. Load clusters for BBS routes with LBCU on them----
-clust <- read.csv("Data/LBCUBBSClusters.csv")
+clust <- read.csv("Data/LBCUBBSClusters.csv") 
 
 #2. Import bbs monitoring data----
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
