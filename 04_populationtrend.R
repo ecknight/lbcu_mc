@@ -46,10 +46,10 @@ dat.j <- prepare_data(strat_data = bbs.j,
                       heavy_tailed=TRUE)
 
 #6. Run bbsbayes model----
-mod.j <- run_model(jags_data = dat.j,
-                       parallel = TRUE,
-                       parameters_to_save = c("n","n3"))
-mod.j$stratify_by <- "cluster"
+# mod.j <- run_model(jags_data = dat.j,
+#                        parallel = TRUE,
+#                        parameters_to_save = c("n","n3"))
+# mod.j$stratify_by <- "cluster"
   
 #write_rds(mod.j, "bbsBayesModels/LBCU_cluster_gam.rds")
 mod.j <- read_rds("bbsBayesModels/LBCU_cluster_gam.rds") 
@@ -64,6 +64,12 @@ all_area_weights <- utils::read.csv("Data/area_weight.csv") %>%
 indices.j <- generate_indices(jags_mod = mod.j,
                               jags_data = dat.j,
                               regions="stratum")
+
+tp <- plot_indices(indices.j)
+
+pdf(file = "Figs/Trajectories.pdf")
+print(tp)
+dev.off()
 
 #8. Calculate trends----
 trends.j <- generate_trends(indices = indices.j,
