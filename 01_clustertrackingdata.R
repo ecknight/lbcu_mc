@@ -4,8 +4,12 @@ library(data.table)
 
 options(scipen=9999)
 
+#TO DO: Pick full years of data for random selection. Or maybe 1 point per season???----
+#TO DO: Think about whether to remove the Atlantic coast individual####
+
 #1. Import data----
-dat.raw <- read.csv("Data/LBCUMCLocations.csv") 
+dat.raw <- read.csv("Data/LBCUMCLocations.csv") %>% 
+  dplyr::filter(id!=129945787)
 
 #2. Wrangle data to longest duration winter & stopover location for each individual----
 dat.days <- dat.raw %>% 
