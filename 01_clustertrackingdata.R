@@ -49,7 +49,7 @@ dat.kde <- list()
 set.seed(1)
 for(i in 1:boot){
   
-  #5. Pick one year of data for each individual and make it wide----
+  #5. Pick one point for each season for each individual and make it wide----
   
   dat.i <- dat %>% 
     dplyr::filter(id %in% dat.n$id) %>% 
@@ -77,7 +77,7 @@ for(i in 1:boot){
   
   dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
     pivot_wider(id_cols=id, names_from=nclust, values_from=clusters, names_prefix="kde_") %>% 
-    left_join(dat) %>% 
+    left_join(dat.i) %>% 
     pivot_longer(names_to="nclust", values_to="kdecluster", cols=kde_2:kde_9, names_prefix="kde_") %>% 
     mutate(nclust = as.numeric(nclust),
            boot = i)
@@ -93,6 +93,12 @@ print(paste0("Finished bootstrap ", i, " of ", boot))
   
 }
 
-#8. Save clusters----
-write.csv(rbindlist(dat.kde), "Data/LBCUKDEClusters.csv", row.names=FALSE)
+#8. Save----
+dat.out <- rbindlist(dat.kde) %>% 
+  pivot_longer(cols=c(X_breed:Y_winter),
+               names_to="season", values_to="value") %>% 
+  separate(season, into=c("coord", "season")) %>% 
+  pivot_wider(names_from=coord, values_from=value)
+  
+write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
 
