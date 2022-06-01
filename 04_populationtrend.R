@@ -13,46 +13,41 @@ clust <- read.csv("Data/LBCUBBSClusters.csv")
 #2. Import bbs monitoring data----
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
 
-#3. Subset bbs route clusters----
-clusters <- 4
+#3. Wrangle bbs data into just routes of interest and add cluster attribution----
+bbs <- list()
 
-clust.j <- clust %>% 
-  dplyr::filter(nclust==clusters)
-
-#4. Wrangle bbs data into just routes of interest and add cluster attribution----
-bbs.j <- list()
-
-bbs.j[["route_strat"]] <- bbs_data[["route"]] %>% 
+bbs[["route_strat"]] <- bbs_data[["route"]] %>% 
   mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-  inner_join(clust.j) %>% 
+  inner_join(clust) %>% 
   mutate(strat_name=knncluster,
          rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-"))
 
-bbs.j[["species_strat"]] <- bbs_data[["species"]]
+bbs[["species_strat"]] <- bbs_data[["species"]]
 
-bbs.j[["bird_strat"]] <- bbs_data[["bird"]] %>% 
+bbs[["bird_strat"]] <- bbs_data[["bird"]] %>% 
   mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
   dplyr::filter(id %in% clust$id) %>% 
   mutate(rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-"))
 
-bbs.j$stratify_by <- "bcr"  
+bbs$stratify_by <- "bcr"  
 
-#5. Prepare data for bbsbayes----
-dat.j <- prepare_data(strat_data = bbs.j,
+#4. Prepare data for bbsbayes----
+dat <- prepare_data(strat_data = bbs,
                       species_to_run = "Long-billed Curlew",
                       model = "gam",
                       heavy_tailed=TRUE)
 
 #6. Run bbsbayes model----
-# mod.j <- run_model(jags_data = dat.j,
-#                        parallel = TRUE,
-#                        parameters_to_save = c("n","n3"))
-# mod.j$stratify_by <- "cluster"
+#10:58
+mod <- run_model(jags_data = dat,
+                       parallel = TRUE,
+                       parameters_to_save = c("n","n3"))
+mod$stratify_by <- "cluster"
   
-#write_rds(mod.j, "bbsBayesModels/LBCU_cluster_gam.rds")
-mod.j <- read_rds("bbsBayesModels/LBCU_cluster_gam.rds") 
+write_rds(mod, "bbsBayesModels/LBCU_cluster_gam.rds")
+mod <- read_rds("bbsBayesModels/LBCU_cluster_gam.rds") 
 
 #7. Create annual indices----
 all_area_weights <- utils::read.csv("Data/area_weight.csv") %>% 
@@ -61,8 +56,8 @@ all_area_weights <- utils::read.csv("Data/area_weight.csv") %>%
   rename(region = knncluster) %>% 
   dplyr::select(region, area_sq_km)
 
-indices.j <- generate_indices(jags_mod = mod.j,
-                              jags_data = dat.j,
+indices.j <- generate_indices(jags_mod = mod,
+                              jags_data = dat,
                               regions="stratum")
 
 tp <- plot_indices(indices.j)
@@ -78,8 +73,8 @@ trends.j <- generate_trends(indices = indices.j,
                             Max_year = 2019)
 
 #9. Save output----
-trend.list <- data.frame(route = dat.j$route,
-                         count = dat.j$count) %>%  
+trend.list <- data.frame(route = dat$route,
+                         count = dat$count) %>%  
   mutate(pres = ifelse(count > 0, 1, 0)) %>% 
   group_by(route) %>% 
   summarize(pres = sum(count),
@@ -88,7 +83,7 @@ trend.list <- data.frame(route = dat.j$route,
             count.max = max(count),
             years = n()) %>% 
   ungroup() %>% 
-  left_join(bbs.j$route_strat %>% 
+  left_join(bbs$route_strat %>% 
               rename(route = rt.uni) %>% 
               dplyr::select(Country, State, route, id, knncluster, knnprob, nclust, X, Y) %>% 
               unique()) %>% 
