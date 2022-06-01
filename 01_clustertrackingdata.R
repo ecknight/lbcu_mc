@@ -4,6 +4,9 @@ library(data.table)
 
 options(scipen=9999)
 
+#TO DO: RE-EVALUATE RANDOM SELECTION OF POINTS####
+#Bootstrapping isn't giving much variation
+
 #1. Import data----
 dat.raw <- read.csv("Data/LBCUMCLocations.csv")
 
@@ -50,7 +53,6 @@ set.seed(1)
 for(i in 1:boot){
   
   #5. Pick one point for each season for each individual and make it wide----
-  
   dat.i <- dat %>% 
     dplyr::filter(id %in% dat.n$id) %>% 
     group_by(id, season) %>% 
