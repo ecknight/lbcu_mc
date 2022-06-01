@@ -577,15 +577,19 @@ mantel <- rbindlist(mantel.out)
 results <- full_join(mc, mantel)
 
 write.csv(results, "Data/LBCUMigConnectivity.csv")
+results <- read.csv("Data/LBCUMigConnectivity.csv")
 
 #18. Summarize results by season----
-mantel.sum <- mantel %>% 
+mantel.sum <- results %>% 
   group_by(nclust, season, boot) %>% 
   summarize(mean=mean(r, na.rm=TRUE),
             sd=sd(r)) %>% 
   ungroup()
 
-sum <- full_join(mc, mantel.sum) %>% 
+sum <- results %>% 
+  dplyr::select(MC, MClow, MChigh, nclust, season, boot) %>% 
+  unique() %>% 
+  full_join(mantel.sum) %>% 
   mutate(mc.s = (MC - min(MC, na.rm=TRUE))/(max(MC, na.rm=TRUE) - min(MC, na.rm=TRUE)),
          r.s = 1-(mean - min(mean, na.rm=TRUE))/(max(mean, na.rm=TRUE) - min(mean, na.rm=TRUE)),
          f = (mc.s*r.s)/(mc.s+r.s)) %>% 
