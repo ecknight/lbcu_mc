@@ -37,7 +37,8 @@ for(i in 1:length(list)){
 #6. Get shp of 95% isopleth----
 kd.sp <- getverticeshr(kd, percent=95) %>% 
   st_as_sf() %>% 
-  st_transform(crs=4326)
+  st_transform(crs=4326) %>% 
+  dplyr::select(-area)
 write_sf(kd.sp, "gis/kde.shp")
 
 #PART B: INDIVIDUALS####
