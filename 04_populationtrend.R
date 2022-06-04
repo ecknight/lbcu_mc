@@ -51,10 +51,10 @@ mod <- read_rds("bbsBayesModels/LBCU_cluster_gam.rds")
 
 #7. Create annual indices----
 all_area_weights <- utils::read.csv("Data/area_weight.csv") %>% 
-  dplyr::filter(nclust==clusters) %>% 
   mutate(area_sq_km = area/1000) %>% 
   rename(region = knncluster) %>% 
   dplyr::select(region, area_sq_km)
+write.csv(all_area_weights, "/Library/Frameworks/R.framework/Versions/4.1/Resources/library/bbsBayes/composite-regions/cluster.csv", row.names = FALSE)
 
 indices.j <- generate_indices(jags_mod = mod,
                               jags_data = dat,
