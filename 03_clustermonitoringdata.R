@@ -3,10 +3,13 @@ library(class)
 library(sf)
 library(data.table)
 library(adehabitatHR)
+library(rpart)
+library(party)
+library(klaR)
 
 options(scipen=9999)
 
-#TO DO: FIGURE OUT KNN HYPERPARAMETER####
+#A. PREAMBLE####
 
 #1. Import tracking data with training clusters----
 track.raw <- read.csv("Data/LBCUKDEClusters.csv")
@@ -37,29 +40,161 @@ bbs.sf <- routes %>%
 #3. Set # of clusters---
 clusters <- 3
 
-#4. Set up bootstrap loop----
+#B. PICK ALGORITHM####
+
+#1. Set k for cross-fold validation----
+k <- 10
+
+#2. Pull training data using 1st bootstrap, randomize, assign fold----
+dat <- track.raw %>% 
+  dplyr::filter(nclust==clusters,
+                boot==1,
+                season=="breed") %>% 
+  mutate(rand = rnorm(n())) %>% 
+  arrange(rand) %>% 
+  mutate(fold = ceiling(row_number()/(n()/10)))
+
+#3. Set up k-fold----
+set.seed(1)
+out.k <- list()
+for(i in 1:k){
+  
+  dat.train <- dat %>% 
+    dplyr::filter(fold != i)
+  
+  dat.test <- dat %>% 
+    dplyr::filter(fold==i)
+  
+  #4. KNN----
+  knn.k <- dat.test %>% 
+    cbind(data.frame(knn1 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=1, prob=TRUE))) %>% 
+    cbind(data.frame(knn2 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=2, prob=TRUE))) %>% 
+    cbind(data.frame(knn3 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=3, prob=TRUE))) %>% 
+    cbind(data.frame(knn4 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=4, prob=TRUE))) %>% 
+    cbind(data.frame(knn5 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=5, prob=TRUE))) %>% 
+    cbind(data.frame(knn6 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=6, prob=TRUE))) %>% 
+    cbind(data.frame(knn7 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=7, prob=TRUE))) %>% 
+    cbind(data.frame(knn8 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=8, prob=TRUE))) %>% 
+    cbind(data.frame(knn9 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=9, prob=TRUE))) %>% 
+    cbind(data.frame(knn10 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=10, prob=TRUE))) %>% 
+    cbind(data.frame(knn20 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=20, prob=TRUE)))
+  
+  #5. Rpart classification tree----
+  rpart.k <- rpart::rpart(as.factor(kdecluster) ~ X + Y, data=dat.train, method="class") %>% 
+    predict(dat.test, type="class") %>% 
+    data.frame() %>% 
+    rename(rpart = '.') %>% 
+    cbind(dat.test)
+  
+  #6. Party conditional inference tree----
+  party.k <- ctree(as.factor(kdecluster) ~ X + Y, data=dat.train) %>% 
+    predict(dat.test) %>% 
+    data.frame() %>% 
+    rename(party = '.') %>% 
+    cbind(dat.test)
+  
+  #7. Naive bayes----
+  nb.k <- NaiveBayes(as.factor(kdecluster) ~ X + Y, data=dat.train) %>% 
+    predict(dat.test) %>% 
+    data.frame() %>% 
+    dplyr::select(class) %>% 
+    rename(nb = class) %>% 
+    cbind(dat.test)
+  
+  #8. Linear discriminant analysis----
+  lda.k <- train(as.factor(kdecluster) ~ X + Y, data=dat.train, method="lda") %>% 
+    predict(dat.test) %>% 
+    data.frame() %>% 
+    rename(lda = '.') %>% 
+    cbind(dat.test)
+  
+  #9. Bag FDA----
+  other.k <- train(as.factor(kdecluster) ~ X + Y, data=dat.train, method="bagFDA") %>% 
+    predict(dat.test) %>% 
+    data.frame() %>% 
+    rename(other = '.') %>% 
+    cbind(dat.test)
+  
+  #10. Random forest----
+  rf.k <- train(as.factor(kdecluster) ~ X + Y, data=dat.train, method="rf") %>% 
+    predict(dat.test) %>% 
+    data.frame() %>% 
+    rename(rf = '.') %>% 
+    cbind(dat.test)
+  
+  #11. Support vector machine----
+  svm.k <- train(as.factor(kdecluster) ~ X + Y, data=dat.train, method="svmLinear") %>% 
+    predict(dat.test) %>% 
+    data.frame() %>% 
+    rename(svm = '.') %>% 
+    cbind(dat.test)
+  
+  #Put together----
+  out.k[[i]] <- full_join(knn.k, rpart.k) %>% 
+    full_join(party.k) %>% 
+    full_join(nb.k) %>% 
+    full_join(lda.k) %>% 
+    full_join(other.k) %>% 
+    full_join(rf.k) %>% 
+    full_join(svm.k)
+  
+}
+
+#6. Evaluate match----
+out <- rbindlist(out.k) %>% 
+  dplyr::select(-nclust, -boot, -season, -X, -Y, -rand) %>% 
+  pivot_longer(cols=knn1:svm, names_to="method", values_to="pred") %>% 
+  mutate(match = ifelse(kdecluster==pred, 1, 0))
+
+#7. Summarize----
+out %>% 
+  group_by(method) %>% 
+  summarize(correct=sum(match),
+            total = n(),
+            percent = correct/total) %>% 
+  arrange(-percent)
+
+#C. PREDICT TO BBS DATA####
+
+#1. Set up bootstrap loop----
 boot <- max(track.raw$boot)
 
 knn.out <- list()
+lda.out <- list()
+nb.out <- list()
 for(i in 1:boot){
   
-  #5. Wrangle tracking data----
+  #2. Wrangle tracking data----
   track.i <- track.raw %>% 
     dplyr::filter(nclust==clusters,
                   boot==i,
                   season=="breed")
   
-  #6. Put together with BBS data----
+  #3. Put together with BBS data----
   bbs.i <- bbs.sf %>% 
     dplyr::select(id, X, Y, type)
   
-  #7. KNN with cluster id as initial membership #----
+  #4. KNN----
   knn.i <- knn(train=track.i[,c("X", "Y")], test=bbs.i[,c("X", "Y")], cl=track.i$kdecluster, k=1, prob=TRUE)
   
-  #8. Keep knn membership of each BBS route and tracking data point----
   knn.out[[i]] <- data.frame(knncluster=knn.i,
                              knnprob=attr(knn.i, "prob"),
                              boot=i) %>% 
+    cbind(bbs.i)
+  
+  #5. Nave bayes----
+  nb.out[[i]] <- NaiveBayes(as.factor(kdecluster) ~ X + Y, data=track.i) %>% 
+    predict(bbs.i) %>% 
+    data.frame() %>% 
+    dplyr::select(class) %>% 
+    rename(nbcluster = class) %>% 
+    cbind(bbs.i)
+  
+  #6. LDA----
+  lda.out[[i]] <- train(as.factor(kdecluster) ~ X + Y, data=track.i, method="lda") %>% 
+    predict(bbs.i) %>% 
+    data.frame() %>% 
+    rename(ldacluster = '.') %>% 
     cbind(bbs.i)
   
   print(paste0("Finished bootstrap ", i, " of ", boot))
@@ -68,6 +203,8 @@ for(i in 1:boot){
 
 #9. Collapse results----
 knn.all <- rbindlist(knn.out)
+nb.all <- rbindlist(nb.out)
+lda.all <- rbindlist(lda.out)
 
 #10. Look at variation in cluster membership----
 knn.sum <- knn.all %>% 
@@ -76,15 +213,45 @@ knn.sum <- knn.all %>%
   ungroup()
 summary(knn.sum$n)
 
+nb.sum <- nb.all %>% 
+  group_by(id, nbcluster) %>% 
+  summarize(n=n()) %>% 
+  ungroup()
+summary(nb.sum$n)
+
+lda.sum <- lda.all %>% 
+  group_by(id, ldacluster) %>% 
+  summarize(n=n()) %>% 
+  ungroup()
+summary(lda.sum$n)
+
 knn.99 <- knn.sum %>% 
   dplyr::filter(n < 100)
 table(knn.99$id)
-#Only 46 points that have 1 instance of cluster variation
+#Only 50 points that have 1 instance of cluster variation
+
+nb.99 <- nb.sum %>% 
+  dplyr::filter(n < 100)
+table(nb.99$id)
+
+lda.99 <- lda.sum %>% 
+  dplyr::filter(n < 100)
+table(lda.99$id)
 
 #11. Pick mean dominant cluster ID for each route----
 knn.final <- knn.all %>% 
   group_by(id, X, Y, type) %>% 
   summarize(knncluster = round(mean(as.numeric(knncluster)))) %>% 
+  ungroup()
+
+nb.final <- nb.all %>% 
+  group_by(id, X, Y, type) %>% 
+  summarize(nbcluster = round(mean(as.numeric(nbcluster)))) %>% 
+  ungroup()
+
+lda.final <- lda.all %>% 
+  group_by(id, X, Y, type) %>% 
+  summarize(ldacluster = round(mean(as.numeric(ldacluster)))) %>% 
   ungroup()
 
 #14. Visualize----
@@ -93,19 +260,27 @@ track.final <- track.raw %>%
 
 ggplot(knn.final) +
   geom_point(aes(x=X, y=Y, colour=factor(knncluster))) +
-  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white")
+  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3)
+
+ggplot(nb.final) +
+  geom_point(aes(x=X, y=Y, colour=factor(nbcluster))) +
+  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3)
+
+ggplot(lda.final) +
+  geom_point(aes(x=X, y=Y, colour=factor(ldacluster))) +
+  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3)
 
 #15. Calculate MCP area for BBSbayes-----
-sp <- SpatialPointsDataFrame(coords=cbind(knn.final$X, knn.final$Y), 
-                               data=data.frame(ID=knn.final$knncluster),
+sp <- SpatialPointsDataFrame(coords=cbind(nb.final$X, nb.final$Y), 
+                               data=data.frame(ID=nb.final$cartcluster),
                                proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
 
 mp <- mcp(sp[,1], percent=100)
 
-knn.area <- data.frame(mp) %>% 
-  rename(knncluster=id)
+nb.area <- data.frame(mp) %>% 
+  rename(cartcluster=id)
 
 #15. Save out----
-write.csv(knn.all, "Data/LBCUBBSClustersAll.csv", row.names = FALSE)
-write.csv(knn.area, "Data/area_weight.csv", row.names = FALSE)
-write.csv(knn.final, "Data/LBCUBBSClusters.csv", row.names = FALSE)
+write.csv(nb.all, "Data/LBCUBBSClustersAll.csv", row.names = FALSE)
+write.csv(nb.area, "Data/area_weight.csv", row.names = FALSE)
+write.csv(nb.final, "Data/LBCUBBSClusters.csv", row.names = FALSE)
