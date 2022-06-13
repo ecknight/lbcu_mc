@@ -49,7 +49,7 @@ for(i in 1:boot){
     dplyr::filter(boot==i)
   
   #4. Set up loop through # of clusters---
-  clusters <- c(2:9)
+  clusters <- unique(dat$nclust)
   
   mantel.list <- list()
   mc.df <- data.frame()
@@ -346,27 +346,36 @@ for(i in 1:boot){
       ungroup() %>% 
       summarize(n = min(n))
     
-    if(nw.j$n <= 4){
-      siteswb.j <- idw.j %>% 
-        group_by(breed_id) %>% 
-        summarize(X=mean(X_breed),
-                  Y=mean(Y_breed)) %>% 
-        ungroup() %>% 
-        st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
-        st_buffer(40000) %>% 
-        st_cast("MULTIPOLYGON")
-    }
+    siteswb.j <- idw.j %>% 
+      group_by(breed_id) %>% 
+      summarize(X=mean(X_breed),
+                Y=mean(Y_breed)) %>% 
+      ungroup() %>% 
+      st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
+      st_buffer(50000) %>% 
+      st_cast("MULTIPOLYGON")
     
-    if(nw.j$n > 4){
-      spw.j <- SpatialPointsDataFrame(coords=cbind(idw.j$X_breed, idw.j$Y_breed), 
-                                      data=data.frame(ID=idw.j$breed_id),
-                                      proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
-      
-      siteswb.j <- try(mcp(spw.j[,1], percent=30) %>% 
-                         st_as_sf() %>% 
-                         dplyr::select(geometry)) %>% 
-        st_cast("MULTIPOLYGON")
-    }
+    # if(nw.j$n <= 4){
+    #   siteswb.j <- idw.j %>% 
+    #     group_by(breed_id) %>% 
+    #     summarize(X=mean(X_breed),
+    #               Y=mean(Y_breed)) %>% 
+    #     ungroup() %>% 
+    #     st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
+    #     st_buffer(40000) %>% 
+    #     st_cast("MULTIPOLYGON")
+    # }
+    # 
+    # if(nw.j$n > 4){
+    #   spw.j <- SpatialPointsDataFrame(coords=cbind(idw.j$X_breed, idw.j$Y_breed), 
+    #                                   data=data.frame(ID=idw.j$breed_id),
+    #                                   proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+    #   
+    #   siteswb.j <- try(mcp(spw.j[,1], percent=30) %>% 
+    #                      st_as_sf() %>% 
+    #                      dplyr::select(geometry)) %>% 
+    #     st_cast("MULTIPOLYGON")
+    # }
     
     #Fall
     nf.j <- idf.j %>% 
@@ -375,26 +384,35 @@ for(i in 1:boot){
       ungroup() %>% 
       summarize(n = min(n))
     
-    if(nf.j$n <= 4){
-      sitesfb.j <- idf.j %>% 
-        group_by(breed_id) %>% 
-        summarize(X=mean(X_breed),
-                  Y=mean(Y_breed)) %>% 
-        ungroup() %>% 
-        st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
-        st_buffer(40000) %>% 
-        st_cast("MULTIPOLYGON")
-    }
+    sitesfb.j <- idf.j %>% 
+      group_by(breed_id) %>% 
+      summarize(X=mean(X_breed),
+                Y=mean(Y_breed)) %>% 
+      ungroup() %>% 
+      st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
+      st_buffer(50000) %>% 
+      st_cast("MULTIPOLYGON")
     
-    if(nf.j$n > 4){
-      spf.j <- SpatialPointsDataFrame(coords=cbind(idf.j$X_breed, idf.j$Y_breed), 
-                                      data=data.frame(ID=idf.j$breed_id),
-                                      proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
-      
-      sitesfb.j <- try(mcp(spf.j[,1], percent=30) %>% 
-                         st_as_sf() %>% 
-                         dplyr::select(geometry))
-    }
+    # if(nf.j$n <= 4){
+    #   sitesfb.j <- idf.j %>% 
+    #     group_by(breed_id) %>% 
+    #     summarize(X=mean(X_breed),
+    #               Y=mean(Y_breed)) %>% 
+    #     ungroup() %>% 
+    #     st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
+    #     st_buffer(40000) %>% 
+    #     st_cast("MULTIPOLYGON")
+    # }
+    # 
+    # if(nf.j$n > 4){
+    #   spf.j <- SpatialPointsDataFrame(coords=cbind(idf.j$X_breed, idf.j$Y_breed), 
+    #                                   data=data.frame(ID=idf.j$breed_id),
+    #                                   proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+    #   
+    #   sitesfb.j <- try(mcp(spf.j[,1], percent=30) %>% 
+    #                      st_as_sf() %>% 
+    #                      dplyr::select(geometry))
+    # }
     
     #spring
     ns.j <- ids.j %>% 
@@ -403,26 +421,35 @@ for(i in 1:boot){
       ungroup() %>% 
       summarize(n = min(n))
     
-    if(ns.j$n <= 4){
-      sitessb.j <- ids.j %>% 
-        group_by(breed_id) %>% 
-        summarize(X=mean(X_breed),
-                  Y=mean(Y_breed)) %>% 
-        ungroup() %>% 
-        st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
-        st_buffer(40000) %>% 
-        st_cast("MULTIPOLYGON")
-    }
+    sitessb.j <- ids.j %>% 
+      group_by(breed_id) %>% 
+      summarize(X=mean(X_breed),
+                Y=mean(Y_breed)) %>% 
+      ungroup() %>% 
+      st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
+      st_buffer(50000) %>% 
+      st_cast("MULTIPOLYGON")
     
-    if(ns.j$n > 4){
-      sps.j <- SpatialPointsDataFrame(coords=cbind(ids.j$X_breed, ids.j$Y_breed), 
-                                      data=data.frame(ID=ids.j$breed_id),
-                                      proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
-      
-      sitessb.j <- try(mcp(sps.j[,1], percent=30) %>% 
-                         st_as_sf() %>% 
-                         dplyr::select(geometry))
-    }
+    # if(ns.j$n <= 4){
+    #   sitessb.j <- ids.j %>% 
+    #     group_by(breed_id) %>% 
+    #     summarize(X=mean(X_breed),
+    #               Y=mean(Y_breed)) %>% 
+    #     ungroup() %>% 
+    #     st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
+    #     st_buffer(40000) %>% 
+    #     st_cast("MULTIPOLYGON")
+    # }
+    # 
+    # if(ns.j$n > 4){
+    #   sps.j <- SpatialPointsDataFrame(coords=cbind(ids.j$X_breed, ids.j$Y_breed), 
+    #                                   data=data.frame(ID=ids.j$breed_id),
+    #                                   proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+    #   
+    #   sitessb.j <- try(mcp(sps.j[,1], percent=30) %>% 
+    #                      st_as_sf() %>% 
+    #                      dplyr::select(geometry))
+    # }
     
     
     #12. Create winter region polygons----
@@ -595,23 +622,35 @@ sum <- results %>%
          f = (mc.s*r.s)/(mc.s+r.s)) %>% 
   group_by(season, boot) %>% 
   mutate(maxf = max(f),
-         vote = ifelse(f==maxf, 1, 0)) %>% 
+         votef = ifelse(f==maxf, 1, 0),
+         maxmc = max(mc.s),
+         votemc = ifelse(mc.s==maxmc, 1, 0)) %>% 
   ungroup() %>% 
   arrange(boot, season, nclust)
 
 sum %>% 
-  dplyr::filter(vote==1) %>% 
+  dplyr::filter(votef==1) %>% 
+  group_by(season, nclust) %>% 
+  summarize(n=n())
+
+sum %>% 
+  dplyr::filter(votemc==1) %>% 
   group_by(season, nclust) %>% 
   summarize(n=n())
 
 ggplot(sum) +
-  geom_point(aes(x=nclust, y=mc.s), colour="blue") +
-  geom_point(aes(x=nclust, y=r.s), colour="red") +
-  geom_point(aes(x=nclust, y=f), colour="black") +
-  geom_smooth(aes(x=nclust, y=mc.s), colour="blue") +
-  geom_smooth(aes(x=nclust, y=r.s), colour="red") +
-  geom_smooth(aes(x=nclust, y=f), colour="black") +
+#  geom_point(aes(x=nclust, y=mc.s), colour="blue") +
+#  geom_point(aes(x=nclust, y=r.s), colour="red") +
+#  geom_point(aes(x=nclust, y=f), colour="black") +
+#  geom_smooth(aes(x=nclust, y=mc.s), colour="blue") +
+#  geom_smooth(aes(x=nclust, y=r.s), colour="red") +
+#  geom_smooth(aes(x=nclust, y=f), colour="black") +
+ geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
+ geom_boxplot(aes(x=nclust, y=r.s, group=nclust), colour="red") +
+  geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black") +
   facet_wrap(~season)
+
+ggsave(filename="figs/MC.jpeg", width=12, height=5)
 
 #19. Summarize across seasons----
 sum.sum <- sum %>% 
@@ -621,16 +660,19 @@ sum.sum <- sum %>%
             f = (mc.s*r.s)/(mc.s+r.s)) %>% 
   group_by(boot) %>% 
   mutate(maxf = max(f),
-         vote = ifelse(f==maxf, 1, 0)) %>% 
+         votef = ifelse(f==maxf, 1, 0)) %>% 
   ungroup()
 
 ggplot(sum.sum) +
-  geom_point(aes(x=nclust, y=mc.s), colour="blue") +
-  geom_point(aes(x=nclust, y=r.s), colour="red") +
-  geom_point(aes(x=nclust, y=f), colour="black") +
-  geom_smooth(aes(x=nclust, y=r.s), colour="red") +
-  geom_smooth(aes(x=nclust, y=mc.s), colour="blue") +
-  geom_smooth(aes(x=nclust, y=f), colour="black")
+#  geom_point(aes(x=nclust, y=mc.s), colour="blue") +
+#  geom_point(aes(x=nclust, y=r.s), colour="red") +
+#  geom_point(aes(x=nclust, y=f), colour="black") +
+#  geom_smooth(aes(x=nclust, y=r.s), colour="red") +
+#  geom_smooth(aes(x=nclust, y=mc.s), colour="blue") +
+#  geom_smooth(aes(x=nclust, y=f), colour="black") +
+  geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
+  geom_boxplot(aes(x=nclust, y=r.s, group=nclust), colour="red") +
+  geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black")
 
 sum.sum %>% 
   dplyr::filter(vote==1) %>% 
