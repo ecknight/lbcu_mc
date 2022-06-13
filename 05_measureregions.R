@@ -31,7 +31,8 @@ kd <- kernelUD(dat.sp, grid = 1000, extent=2, h="href", same4all=FALSE)
 list <- names(kd)
 for(i in 1:length(list)){
   kd.r <- raster(kd[[i]])
-  raster::writeRaster(kd.r, paste0("gis/region/kde_", list[i], ".tif"), overwrite=TRUE)
+  kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
+  raster::writeRaster(kd.r.1, paste0("gis/region/kde_", list[i], ".tif"), overwrite=TRUE)
 }
 
 #6. Get shp of 95% isopleth----
@@ -39,7 +40,7 @@ kd.sp <- getverticeshr(kd, percent=95) %>%
   st_as_sf() %>% 
   st_transform(crs=4326) %>% 
   dplyr::select(-area)
-write_sf(kd.sp, "gis/kde.shp")
+
 
 #PART B: INDIVIDUALS####
 
@@ -66,12 +67,35 @@ dat.ind.sp <- dat.ind %>%
   dplyr::select(ID, geometry) %>% 
   as_Spatial()
 
-#3. Calculate KDE----
-kd.ind <- kernelUD(dat.ind.sp, grid = 100, extent=2, h="href", same4all=FALSE)
+#3. Set up loop----
+inds <- unique(dat.ind.sp$ID)
 
-#5. Rasterize----
-list <- names(kd.ind)
-for(i in 1:length(list)){
+kd.ind.sp <- data.frame()
+for(i in 1:length(inds)){
+  
+  dat.i <- dat.ind.sp %>% 
+    dplyr::filter(ID==inds[i])
+  
+  #4. Calculate KDE----
+  kd.ind <- kernelUD(dat.i, grid = 500, extent=2, h="href", same4all=FALSE)
+  
+  #5. Rasterize----
   kd.r <- raster(kd.ind[[i]])
-  raster::writeRaster(kd.r, paste0("gis/individual/kde_", list[i], ".tif"), overwrite=TRUE)
+  kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
+  raster::writeRaster(kd.r.1, paste0("gis/individual/kde_", list[i], ".tif"), overwrite=TRUE)
+  
+  #6. Get shp of 95% isopleth----
+  kd.sp.i <- getverticeshr(kd.ind, percent=95) %>% 
+    st_as_sf() %>% 
+    st_transform(crs=4326) %>% 
+    dplyr::select(-area)
+  
+  kd.ind.sp <- rbind(kd.ind.sp, kd.sp.i)
+  
+  print(paste0("Finished individual ", i, " of ", length(inds)))
+  
 }
+
+#7. Put the 95% isopleth shp together----
+kd.all.sp <- rbind(kd.ind.sp, kd.sp)
+write_sf(kd.all.sp, "gis/kde.shp")
