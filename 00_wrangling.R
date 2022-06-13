@@ -6,8 +6,6 @@ library(ggmap)
 
 options(scipen=9999)
 
-#TO DO: Still need to figure out stopovers > 30 days long####
-
 #1. Read in data and filter out individuals that don't have locations for both seasons
 dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
   dplyr::filter(!id %in% c(46768277, 33088, 129945787))
