@@ -8,73 +8,78 @@ library(gridExtra)
 source("functions.R")
 
 #1. Load clusters for BBS routes with LBCU on them----
-clust <- read.csv("Data/LBCUBBSClusters.csv") 
+clust.j <- read.csv("Data/LBCUBBSClusters.csv") 
 
 #2. Import bbs monitoring data----
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
 
 #3. Wrangle bbs data into just routes of interest and add cluster attribution----
-bbs <- list()
+bbs.j <- list()
 
-bbs[["route_strat"]] <- bbs_data[["route"]] %>% 
+bbs.j[["route_strat"]] <- bbs_data[["route"]] %>% 
   mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-  inner_join(clust) %>% 
-  mutate(strat_name=knncluster,
+  inner_join(clust.j) %>% 
+  mutate(strat_name=cartcluster,
          rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-"))
 
-bbs[["species_strat"]] <- bbs_data[["species"]]
+bbs.j[["species_strat"]] <- bbs_data[["species"]]
 
-bbs[["bird_strat"]] <- bbs_data[["bird"]] %>% 
+bbs.j[["bird_strat"]] <- bbs_data[["bird"]] %>% 
   mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-  dplyr::filter(id %in% clust$id) %>% 
+  dplyr::filter(id %in% clust.j$id) %>% 
   mutate(rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-"))
 
-bbs$stratify_by <- "bcr"  
+bbs.j$stratify_by <- "bcr"  
 
 #4. Prepare data for bbsbayes----
-dat <- prepare_data(strat_data = bbs,
+dat.j <- prepare_data(strat_data = bbs.j,
                       species_to_run = "Long-billed Curlew",
-                      model = "gam",
+                      model = "gamye",
                       heavy_tailed=TRUE)
-
+ 
 #6. Run bbsbayes model----
-#10:58
-mod <- run_model(jags_data = dat,
-                       parallel = TRUE,
-                       parameters_to_save = c("n","n3"))
-mod$stratify_by <- "cluster"
-  
-write_rds(mod, "bbsBayesModels/LBCU_cluster_gam.rds")
-mod <- read_rds("bbsBayesModels/LBCU_cluster_gam.rds") 
+start.time <- Sys.time()
+mod.j <- run_model(jags_data = dat.j,
+                 parallel = TRUE,
+                 parameters_to_save = c("n","n3"),
+                 n_burnin = 100,
+                 n_save_steps = 10,
+                 n_iter = 100)
+mod.j$stratify_by <- "cluster"
+end.time <- Sys.time()
+
+#write_rds(mod.j, "bbsBayesModels/LBCU_cluster_gam.rds")
+#mod.j <- read_rds("bbsBayesModels/LBCU_cluster_gam.rds") 
 
 #7. Create annual indices----
 all_area_weights <- utils::read.csv("Data/area_weight.csv") %>% 
   mutate(area_sq_km = area/1000) %>% 
-  rename(region = knncluster) %>% 
+  rename(region = cartcluster) %>% 
   dplyr::select(region, area_sq_km)
+
 write.csv(all_area_weights, "/Library/Frameworks/R.framework/Versions/4.1/Resources/library/bbsBayes/composite-regions/cluster.csv", row.names = FALSE)
 
-indices.j <- generate_indices(jags_mod = mod,
-                              jags_data = dat,
-                              regions="stratum")
+indices <- generate_indices(jags_mod = mod.j,
+                            jags_data = dat.j,
+                            regions="stratum")
 
-tp <- plot_indices(indices.j)
+tp <- plot_indices(indices)
 
 pdf(file = "Figs/Trajectories.pdf")
 print(tp)
 dev.off()
 
 #8. Calculate trends----
-trends.j <- generate_trends(indices = indices.j,
+trends <- generate_trends(indices = indices,
                             slope=TRUE,
                             Min_year = 1970,
                             Max_year = 2019)
 
 #9. Save output----
-trend.list <- data.frame(route = dat$route,
-                         count = dat$count) %>%  
+trend.list <- data.frame(route = dat.j$route,
+                         count = dat.j$count) %>%  
   mutate(pres = ifelse(count > 0, 1, 0)) %>% 
   group_by(route) %>% 
   summarize(pres = sum(count),
@@ -83,14 +88,14 @@ trend.list <- data.frame(route = dat$route,
             count.max = max(count),
             years = n()) %>% 
   ungroup() %>% 
-  left_join(bbs$route_strat %>% 
+  left_join(bbs.j$route_strat %>% 
               rename(route = rt.uni) %>% 
-              dplyr::select(Country, State, route, id, knncluster, knnprob, nclust, X, Y) %>% 
+              dplyr::select(Country, State, route, id, cartcluster,  X, Y) %>% 
               unique()) %>% 
-  left_join(trends.j %>% 
-              mutate(knncluster = as.numeric(Region)))
+  left_join(trends %>% 
+              mutate(cartcluster = as.numeric(Region)))
 
-write.csv(trend.list, "Data/LBCU_cluster_gam.csv")
+#write.csv(trend.list, "Data/LBCU_cluster_gam.csv")
 
 #10. Plot----
 plot.map <- ggplot(trend.list) +
@@ -99,15 +104,15 @@ plot.map <- ggplot(trend.list) +
 plot.map
 
 trend <- trend.list %>% 
-  dplyr::select(knncluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
+  dplyr::select(cartcluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
   unique() %>% 
   rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025')
 
 plot.bar <- ggplot(trend) +
   geom_hline(aes(yintercept=0), linetype="dashed", colour="grey30") +
-  geom_point(aes(x=knncluster, y=Trend, colour=Trend), size=2) +
-  geom_errorbar(aes(x=knncluster, ymin=down, ymax=up, colour=Trend)) +
+  geom_point(aes(x=cartcluster, y=Trend, colour=Trend), size=2) +
+  geom_errorbar(aes(x=cartcluster, ymin=down, ymax=up, colour=Trend)) +
   scale_colour_gradient2(high="blue", low="red")
 plot.bar
 
-ggsave(grid.arrange(plot.map, plot.bar), height=8, width=6, units='in', filename="Figs/Trend.jpeg")
+#ggsave(grid.arrange(plot.map, plot.bar), height=8, width=6, units='in', filename="Figs/Trend.jpeg")
