@@ -28,9 +28,11 @@ ggplot(dat.days) +
   geom_histogram(aes(x=days)) +
   facet_grid(cluster.days ~ season)
 
-dat <- dat.days %>% 
-#  dplyr::filter(season %in% c("breed", "winter")) %>% 
-  dplyr::filter(cluster.days==1)
+# dat <- dat.days %>% 
+# #  dplyr::filter(season %in% c("breed", "winter")) %>% 
+#   dplyr::filter(cluster.days==1)
+
+dat <- dat.days
 
 table(dat$season)
 
@@ -63,7 +65,7 @@ for(i in 1:boot){
     data.frame()
   
   #6. KDE with incomplete data clustering----
-  clusters <- c(2:9)
+  clusters <- c(2:6)
   
   kde.cluster <- list()
   for(j in 1:length(clusters)){
@@ -80,7 +82,7 @@ for(i in 1:boot){
   dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
     pivot_wider(id_cols=id, names_from=nclust, values_from=clusters, names_prefix="kde_") %>% 
     left_join(dat.i) %>% 
-    pivot_longer(names_to="nclust", values_to="kdecluster", cols=kde_2:kde_9, names_prefix="kde_") %>% 
+    pivot_longer(names_to="nclust", values_to="kdecluster", cols=kde_2:kde_6, names_prefix="kde_") %>% 
     mutate(nclust = as.numeric(nclust),
            boot = i)
   
@@ -95,12 +97,21 @@ print(paste0("Finished bootstrap ", i, " of ", boot))
   
 }
 
-#8. Save----
+#8. Wrangle output----
 dat.out <- rbindlist(dat.kde) %>% 
   pivot_longer(cols=c(X_breed:Y_winter),
                names_to="season", values_to="value") %>% 
   separate(season, into=c("coord", "season")) %>% 
   pivot_wider(names_from=coord, values_from=value)
-  
-write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
 
+#9. Look at variation----
+dat.sum <- dat.out %>% 
+  group_by(id, season, nclust, kdecluster) %>% 
+  summarize(n=n()) %>% 
+  ungroup()
+
+ggplot(dat.sum) +
+  geom_histogram(aes(x=n)) +
+  facet_grid(season~nclust)
+
+write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
