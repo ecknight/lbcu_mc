@@ -7,6 +7,8 @@ library(gridExtra)
 
 source("functions.R")
 
+#TO DO: CHANGE INTERPRETATION TO TRAJECTORY INSTEAD OF TREND####
+
 #1. Load clusters for BBS routes with LBCU on them----
 clust.j <- read.csv("Data/LBCUBBSClusters.csv") 
 
@@ -19,7 +21,7 @@ bbs.j <- list()
 bbs.j[["route_strat"]] <- bbs_data[["route"]] %>% 
   mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
   inner_join(clust.j) %>% 
-  mutate(strat_name=cartcluster,
+  mutate(strat_name=svmcluster,
          rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-"))
 
@@ -44,19 +46,20 @@ start.time <- Sys.time()
 mod.j <- run_model(jags_data = dat.j,
                  parallel = TRUE,
                  parameters_to_save = c("n","n3"),
-                 n_burnin = 100,
-                 n_save_steps = 10,
-                 n_iter = 100)
+                 # n_burnin = 100,
+                 # n_save_steps = 10,
+                 # n_iter = 100
+                 )
 mod.j$stratify_by <- "cluster"
 end.time <- Sys.time()
 
-#write_rds(mod.j, "bbsBayesModels/LBCU_cluster_gam.rds")
-#mod.j <- read_rds("bbsBayesModels/LBCU_cluster_gam.rds") 
+write_rds(mod.j, "bbsBayesModels/LBCU_cluster_gamye.rds")
+mod.j <- read_rds("bbsBayesModels/LBCU_cluster_gamye.rds") 
 
 #7. Create annual indices----
 all_area_weights <- utils::read.csv("Data/area_weight.csv") %>% 
   mutate(area_sq_km = area/1000) %>% 
-  rename(region = cartcluster) %>% 
+  rename(region = svmcluster) %>% 
   dplyr::select(region, area_sq_km)
 
 write.csv(all_area_weights, "/Library/Frameworks/R.framework/Versions/4.1/Resources/library/bbsBayes/composite-regions/cluster.csv", row.names = FALSE)
@@ -64,12 +67,6 @@ write.csv(all_area_weights, "/Library/Frameworks/R.framework/Versions/4.1/Resour
 indices <- generate_indices(jags_mod = mod.j,
                             jags_data = dat.j,
                             regions="stratum")
-
-tp <- plot_indices(indices)
-
-pdf(file = "Figs/Trajectories.pdf")
-print(tp)
-dev.off()
 
 #8. Calculate trends----
 trends <- generate_trends(indices = indices,
@@ -90,10 +87,10 @@ trend.list <- data.frame(route = dat.j$route,
   ungroup() %>% 
   left_join(bbs.j$route_strat %>% 
               rename(route = rt.uni) %>% 
-              dplyr::select(Country, State, route, id, cartcluster,  X, Y) %>% 
+              dplyr::select(Country, State, route, id, svmcluster,  X, Y) %>% 
               unique()) %>% 
   left_join(trends %>% 
-              mutate(cartcluster = as.numeric(Region)))
+              mutate(svmcluster = as.numeric(Region)))
 
 #write.csv(trend.list, "Data/LBCU_cluster_gam.csv")
 
@@ -104,15 +101,20 @@ plot.map <- ggplot(trend.list) +
 plot.map
 
 trend <- trend.list %>% 
-  dplyr::select(cartcluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
+  dplyr::select(svmcluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
   unique() %>% 
   rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025')
 
 plot.bar <- ggplot(trend) +
   geom_hline(aes(yintercept=0), linetype="dashed", colour="grey30") +
-  geom_point(aes(x=cartcluster, y=Trend, colour=Trend), size=2) +
-  geom_errorbar(aes(x=cartcluster, ymin=down, ymax=up, colour=Trend)) +
+  geom_point(aes(x=svmcluster, y=Trend, colour=Trend), size=2) +
+  geom_errorbar(aes(x=svmcluster, ymin=down, ymax=up, colour=Trend)) +
   scale_colour_gradient2(high="blue", low="red")
 plot.bar
 
-#ggsave(grid.arrange(plot.map, plot.bar), height=8, width=6, units='in', filename="Figs/Trend.jpeg")
+plot.index <- ggplot(indices$data_summary) +
+  geom_ribbon(aes(x=Year, ymin=Index_q_0.025, ymax=Index_q_0.975, group=factor(Region)), alpha = 0.5) +
+  geom_line(aes(x=Year, y=Index, colour=factor(Region)))
+plot.index
+
+ggsave(grid.arrange(plot.map, plot.bar, plot.index, ncol=3), height=6, width=18, units='in', filename="Figs/Trend_FirstDiff.jpeg")
