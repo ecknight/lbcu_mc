@@ -9,7 +9,7 @@ library(raster)
 #PART A: REGIONS####
 
 #1. Set number of clusters----
-n <- 3
+n <- 2
 
 #2. Read in clustered tracking data and assign----
 dat <- read.csv("Data/LBCUKDEClusters.csv") %>% 
@@ -20,7 +20,7 @@ dat <- read.csv("Data/LBCUKDEClusters.csv") %>%
 #3. Make sp object----
 dat.sp <- dat %>% 
   st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
-  mutate(ID = paste0(season, "-", kdecluster)) %>% 
+  mutate(ID = paste0(kdecluster, "-", season, "-region")) %>% 
   dplyr::select(ID, geometry) %>% 
   as_Spatial()
 
@@ -32,7 +32,7 @@ list <- names(kd)
 for(i in 1:length(list)){
   kd.r <- raster(kd[[i]])
   kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
-  raster::writeRaster(kd.r.1, paste0("gis/region/kde_", list[i], ".tif"), overwrite=TRUE)
+  raster::writeRaster(kd.r.1, paste0("gis/raster/kde_", list[i], ".tif"), overwrite=TRUE)
 }
 
 #6. Get shp of 95% isopleth----
@@ -41,6 +41,7 @@ kd.sp <- getverticeshr(kd, percent=95) %>%
   st_transform(crs=4326) %>% 
   dplyr::select(-area)
 
+write_sf(kd.sp, "gis/shp/kde_region.shp")
 
 #PART B: INDIVIDUALS####
 
@@ -51,7 +52,7 @@ dat.ind <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
                 winter!="wintermig") %>% 
   mutate(seasoncluster = ifelse(winter!="other", str_sub(winter, -1, -1), stopovercluster),
          seasoncluster = ifelse(is.na(seasoncluster), 0, as.numeric(seasoncluster)),
-         kdeid = paste(id, season, seasoncluster, sep="-")) %>% 
+         kdeid = paste(season, id, seasoncluster, sep="-")) %>% 
   left_join(dat %>% 
               dplyr::select(id, kdecluster) %>% 
               unique()) %>% 
@@ -64,38 +65,44 @@ dat.ind <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
 dat.ind.sp <- dat.ind %>% 
   st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
   mutate(ID = paste(kdecluster, kdeid, sep="-")) %>% 
-  dplyr::select(ID, geometry) %>% 
-  as_Spatial()
+  dplyr::select(ID, geometry)
 
 #3. Set up loop----
 inds <- unique(dat.ind.sp$ID)
 
 kd.ind.sp <- data.frame()
-for(i in 1:length(inds)){
+for(i in c(1:10)){
   
   dat.i <- dat.ind.sp %>% 
-    dplyr::filter(ID==inds[i])
+    dplyr::filter(ID==inds[i]) %>% 
+    as_Spatial()
   
   #4. Calculate KDE----
-  kd.ind <- kernelUD(dat.i, grid = 500, extent=2, h="href", same4all=FALSE)
+  kd.ind <- kernelUD(dat.i, grid = 1000, extent=2, h="href", same4all=FALSE)
   
   #5. Rasterize----
-  kd.r <- raster(kd.ind[[i]])
+  kd.r <- raster(kd.ind[[1]])
   kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
-  raster::writeRaster(kd.r.1, paste0("gis/individual/kde_", list[i], ".tif"), overwrite=TRUE)
+  raster::writeRaster(kd.r.1, paste0("gis/raster/kde_", inds[i], ".tif"), overwrite=TRUE)
   
   #6. Get shp of 95% isopleth----
-  kd.sp.i <- getverticeshr(kd.ind, percent=95) %>% 
+  kd.sp.i <- try(getverticeshr(kd.ind, percent=95) %>% 
     st_as_sf() %>% 
-    st_transform(crs=4326) %>% 
-    dplyr::select(-area)
+    st_transform(crs=4326))
   
-  kd.ind.sp <- rbind(kd.ind.sp, kd.sp.i)
+  if(class(kd.sp.i)[1]=="sf"){
+    kd.ind.sp <- rbind(kd.ind.sp, kd.sp.i)
+  }
+  else{
+    file.remove(paste0("gis/raster/kde_", inds[i], ".tif"))
+  }
   
   print(paste0("Finished individual ", i, " of ", length(inds)))
   
 }
 
+write_sf(kd.ind.sp, "gis/shp/kde_individual.shp")
+
 #7. Put the 95% isopleth shp together----
 kd.all.sp <- rbind(kd.ind.sp, kd.sp)
-write_sf(kd.all.sp, "gis/kde.shp")
+write_sf(kd.all.sp, "gis/shp/kde.shp")
