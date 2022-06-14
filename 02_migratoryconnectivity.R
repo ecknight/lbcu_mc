@@ -629,11 +629,6 @@ sum <- results %>%
   arrange(boot, season, nclust)
 
 sum %>% 
-  dplyr::filter(votef==1) %>% 
-  group_by(season, nclust) %>% 
-  summarize(n=n())
-
-sum %>% 
   dplyr::filter(votemc==1) %>% 
   group_by(season, nclust) %>% 
   summarize(n=n())
@@ -657,10 +652,12 @@ sum.sum <- sum %>%
   group_by(nclust, boot) %>% 
   summarize(mc.s= mean(mc.s),
             r.s = mean(r.s),
-            f = (mc.s*r.s)/(mc.s+r.s)) %>% 
+            f = mean(f)) %>% 
   group_by(boot) %>% 
   mutate(maxf = max(f),
-         votef = ifelse(f==maxf, 1, 0)) %>% 
+         maxmc = max(mc.s),
+         votef = ifelse(f==maxf, 1, 0),
+         votemc = ifelse(mc.s==maxmc, 1, 0)) %>% 
   ungroup()
 
 ggplot(sum.sum) +
@@ -675,8 +672,8 @@ ggplot(sum.sum) +
   geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black")
 
 sum.sum %>% 
-  dplyr::filter(vote==1) %>% 
+  dplyr::filter(votef==1) %>% 
   group_by(nclust) %>% 
   summarize(n=n())
 
-#3 clusters is optimal
+#2 clusters is optimal
