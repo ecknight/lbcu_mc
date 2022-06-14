@@ -4,8 +4,7 @@ library(data.table)
 
 options(scipen=9999)
 
-#TO DO: RE-EVALUATE RANDOM SELECTION OF POINTS####
-#Bootstrapping isn't giving much variation
+#TO DO: CONSIDER USING A FALL YEAR OF DATA####
 
 #1. Import data----
 dat.raw <- read.csv("Data/LBCUMCLocations.csv")
@@ -54,17 +53,17 @@ dat.kde <- list()
 set.seed(1)
 for(i in 1:boot){
   
-  #5. Pick one point for each season for each individual and make it wide----
+  #5. Pick one point for each season for each individual & make it wide----
   dat.i <- dat %>% 
     dplyr::filter(id %in% dat.n$id) %>% 
+#    dplyr::filter(season %in% c("breed", "winter")) %>% 
     group_by(id, season) %>% 
     sample_n(1) %>% 
-    ungroup() %>% 
     dplyr::select(id, season, X, Y) %>% 
     pivot_wider(id_cols=id, names_from=season, values_from=X:Y) %>% 
     data.frame()
   
-  #6. KDE with incomplete data clustering----
+  #8. KDE with incomplete data clustering----
   clusters <- c(2:6)
   
   kde.cluster <- list()
@@ -86,13 +85,6 @@ for(i in 1:boot){
     mutate(nclust = as.numeric(nclust),
            boot = i)
   
-  #7. Visualize----
-  # ggplot(dat.kde) +
-  #   geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
-  #   facet_grid(season ~ nclust)
-  # 
-  # ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
-  
 print(paste0("Finished bootstrap ", i, " of ", boot))
   
 }
@@ -113,5 +105,21 @@ dat.sum <- dat.out %>%
 ggplot(dat.sum) +
   geom_histogram(aes(x=n)) +
   facet_grid(season~nclust)
+
+#10. Plot----
+dat.mean <- track.raw %>% 
+#dat.mean <- dat.out %>% 
+  dplyr::filter(season=="breed") %>% 
+  group_by(id, season, nclust) %>% 
+  summarize(X = mean(X, na.rm=FALSE), 
+            Y = mean(Y, na.rm=FALSE),
+            kdecluster = round(mean(kdecluster))) %>% 
+  ungroup()
+
+ggplot(dat.mean) +
+  geom_point(aes(x=X, y=Y, colour=factor(kdecluster)))
+  facet_grid(season ~ nclust, scales="free_y")
+
+ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
 
 write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
