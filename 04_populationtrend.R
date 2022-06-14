@@ -68,6 +68,8 @@ indices <- generate_indices(jags_mod = mod.j,
                             jags_data = dat.j,
                             regions="stratum")
 
+write.csv(indices$data_summary, "Data/LBCU_indices_gamye.csv")
+
 #8. Calculate trends----
 trends <- generate_trends(indices = indices,
                             slope=TRUE,
@@ -92,7 +94,7 @@ trend.list <- data.frame(route = dat.j$route,
   left_join(trends %>% 
               mutate(svmcluster = as.numeric(Region)))
 
-#write.csv(trend.list, "Data/LBCU_cluster_gam.csv")
+write.csv(trend.list, "Data/LBCU_trend_gamye.csv")
 
 #10. Plot----
 plot.map <- ggplot(trend.list) +
@@ -117,4 +119,4 @@ plot.index <- ggplot(indices$data_summary) +
   geom_line(aes(x=Year, y=Index, colour=factor(Region)))
 plot.index
 
-ggsave(grid.arrange(plot.map, plot.bar, plot.index, ncol=3), height=6, width=18, units='in', filename="Figs/Trend_FirstDiff.jpeg")
+ggsave(grid.arrange(plot.map, plot.bar, plot.index, ncol=3), height=6, width=18, units='in', filename="Figs/Trend.jpeg")
