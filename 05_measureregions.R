@@ -36,7 +36,7 @@ for(i in 1:length(list)){
 }
 
 #6. Get shp of 95% isopleth----
-kd.sp <- getverticeshr(kd, percent=95) %>% 
+kd.sp <- getverticeshr(kd, percent=50) %>% 
   st_as_sf() %>% 
   st_transform(crs=4326) %>% 
   dplyr::select(-area)
@@ -71,7 +71,7 @@ dat.ind.sp <- dat.ind %>%
 inds <- unique(dat.ind.sp$ID)
 
 kd.ind.sp <- data.frame()
-for(i in c(1:10)){
+for(i in c(1:length(inds))){
   
   dat.i <- dat.ind.sp %>% 
     dplyr::filter(ID==inds[i]) %>% 
@@ -86,7 +86,7 @@ for(i in c(1:10)){
   raster::writeRaster(kd.r.1, paste0("gis/raster/kde_", inds[i], ".tif"), overwrite=TRUE)
   
   #6. Get shp of 95% isopleth----
-  kd.sp.i <- try(getverticeshr(kd.ind, percent=95) %>% 
+  kd.sp.i <- try(getverticeshr(kd.ind, percent=50) %>% 
     st_as_sf() %>% 
     st_transform(crs=4326))
   
@@ -101,8 +101,11 @@ for(i in c(1:10)){
   
 }
 
-write_sf(kd.ind.sp, "gis/shp/kde_individual.shp")
+kd.ind.out <- kd.ind.sp %>% 
+  dplyr::select(-area)
+
+write_sf(kd.ind.out, "gis/shp/kde_individual.shp")
 
 #7. Put the 95% isopleth shp together----
-kd.all.sp <- rbind(kd.ind.sp, kd.sp)
+kd.all.sp <- rbind(kd.ind.out, kd.sp)
 write_sf(kd.all.sp, "gis/shp/kde.shp")
