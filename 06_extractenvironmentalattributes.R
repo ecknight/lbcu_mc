@@ -10,8 +10,6 @@ options(scipen=99999)
 
 #TO DO: CONSIDER GEOPOTENTIAL HEIGHT####
 #TO DO: CONSIDER CENTER PIVOT####
-#TO DO: DEAL WITH KDES THAT OVERLAP OCEAN####
-#TO DO: DEAL WITH KDES THAT ARE TOO BIG####
 
 #1. Initialize rgee----
 ee_Initialize(gcs=TRUE)
@@ -29,10 +27,11 @@ ee_check()
 #3. Get list of raster KDE files----
 files <- data.frame(filepath = list.files("gis", pattern="*.tif", recursive=TRUE, full.names = TRUE)) %>% 
   separate(filepath, into=c("gis", "level", "id"), sep="/", remove=FALSE) %>% 
-  mutate(id = str_sub(id, -100, -5))
+  mutate(id = str_sub(id, -100, -5)) %>% 
+  dplyr::filter(id!="re")
 
 #4. Read in shapefile of 95% isopleths----
-kde <- read_sf("gis/shp/kde.shp")
+kde <- read_sf("gis/shp/kde_individual.shp")
 
 #5. Get Raven density----
 #set_ebirdst_access_key("dkao2v8gv378", overwrite=TRUE)
@@ -40,8 +39,10 @@ kde <- read_sf("gis/shp/kde.shp")
 ebd <- load_raster("/Users/ellyknight/Library/Application Support/ebirdst/comrav-ERD2019-STATUS-20200930-21f8da4a", product="abundance_seasonal", resolution="hr")
 
 #5. Set up loop----
-val.gee <- data.frame()
-for(i in 1:nrow(files)){
+#val.gee <- data.frame()
+task.list <- list()
+raven <- data.frame()
+for(i in 48:nrow(files)){
   
   #6. Read in raster----
   r <- raster(files$filepath[i]) %>% 
@@ -109,8 +110,9 @@ for(i in 1:nrow(files)){
                                  fileFormat = "CSV",
                                  fileNamePrefix = files$id[i])
   task_vector$start()
-  ee_monitoring(task_vector, max_attempts=1000)
-  ee_gcs_to_local(task = task_vector, dsn=paste0("gis/output/", files$id[i], ".csv"))
+  task.list[[i]] <- task_vector
+#  ee_monitoring(task_vector, max_attempts=1000)
+#  ee_gcs_to_local(task = task_vector, dsn=paste0("gis/output/", files$id[i], ".csv"))
   
   #17. Get Raven density----
   kde.ebd <- kde.i %>% 
@@ -125,26 +127,41 @@ for(i in 1:nrow(files)){
     mask(r.ebd)
   
   ebd.m <- ebd.i*r.ebd
-    
-  #17. Put it together----
-  val.gee <- read.csv(paste0("gis/output/", files$id[i], ".csv")) %>% 
-    dplyr::select(-.geo) %>% 
-    rename(water.occur = b1,
-           water.change = b1_1,
-           water.months = b1_2,
-           water.years = b1_3,
-           drought = b1_4,
-           grass = b1_5,
-           wetland = b1_6,
-           crop = b1_7,
-           built = b1_8,
-           cropchg = b1_9,
-           builtchg = b1_10) %>% 
-    mutate(raven = mean(ebd.m@data@values, na.rm=TRUE)) %>% 
-    rbind(val.gee)
-  write.csv(val.gee, "Data/LBCU_environvars.csv", row.names = FALSE)
+  raven = data.frame(raven = mean(ebd.m@data@values, na.rm=TRUE),
+                     id=str_sub(files$id[i], 5, 100)) %>% 
+    rbind(raven)
   
   print(paste0("Finished individual ", i, " of ", nrow(files)))
 }
+
+#17. Put it together----
+val.gee <- data.frame()
+for(i in 1:length(task.list)){
+  
+  try(ee_gcs_to_local(task = task.list[[i]], dsn=paste0("gis/output/", files$id[i], ".csv")))
+  
+  val.i <- try(read.csv(paste0("gis/output/", files$id[i], ".csv")))
+  
+  if(class(val.i)=="FILL IN"){
+    val.gee <- val.i %>% 
+      dplyr::select(-.geo) %>% 
+      rename(water.occur = b1,
+             water.change = b1_1,
+             water.months = b1_2,
+             water.years = b1_3,
+             drought = b1_4,
+             grass = b1_5,
+             wetland = b1_6,
+             crop = b1_7,
+             built = b1_8,
+             cropchg = b1_9,
+             builtchg = b1_10) %>% 
+      rbind(val.gee)
+  }
+
+}
+
+covs <- val.gee %>% 
+  left_join(raven)
 
 write.csv(val.gee, "Data/LBCU_environvars.csv", row.names = FALSE)
