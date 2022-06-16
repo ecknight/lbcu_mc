@@ -3,6 +3,8 @@ library(sf)
 library(sp)
 library(adehabitatHR)
 library(raster)
+library(lme4)
+library(MuMIn)
 
 #TO DO: FOR REGIONS, DECIDE ABOUT BOOTSTRAPS OR NOT####
 
@@ -20,7 +22,7 @@ clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
   ungroup()
 
 #3. Import & wrangle daily locations----
-#filter out migration
+#filter out migration (not stopovers)
 dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
   dplyr::filter(id %in% dat$id,
                 !(season %in% c("springmig", "fallmig") & stopover==0),
@@ -34,13 +36,13 @@ dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
   ungroup() %>% 
   dplyr::filter(n >= 5)
 
-#2. Make sp object----
+#4. Make sp object----
 dat.sp <- dat %>% 
   st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
   mutate(ID = paste(kdecluster, kdeid, sep="-")) %>% 
   dplyr::select(ID, geometry)
 
-#3. Set up loop----
+#5. Set up loop----
 inds <- unique(dat.sp$ID)
 
 kd.sp <- data.frame()
@@ -50,15 +52,15 @@ for(i in c(1:length(inds))){
     dplyr::filter(ID==inds[i]) %>% 
     as_Spatial()
   
-  #4. Calculate KDE----
+  #6. Calculate KDE----
   kd <- kernelUD(dat.i, grid = 1000, extent=2, h="href", same4all=FALSE)
   
-  #5. Rasterize----
+  #7. Rasterize----
   kd.r <- raster(kd[[1]])
   kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
   raster::writeRaster(kd.r.1, paste0("gis/raster/kde_", inds[i], ".tif"), overwrite=TRUE)
   
-  #6. Get shp of 95% isopleth----
+  #8. Get shp of 95% isopleth----
   kd.sp.i <- try(getverticeshr(kd, percent=50) %>% 
     st_as_sf() %>% 
     st_transform(crs=4326))
@@ -74,7 +76,28 @@ for(i in c(1:length(inds))){
   
 }
 
+#9. save----
 kd.out <- kd.sp %>% 
-  mutate(area = round(area))
+  mutate(area = round(area)/100) %>% 
+  separate(id, into=c("kdecluster", "season", "id", "year", "cluster"))
 
 write_sf(kd.out, "gis/shp/kde_individual.shp")
+kd.out <- read_sf("gis/shp/kde_individual.shp")
+
+#10. Seasonal averages----
+kd.sum <- kd.out %>% 
+  dplyr::select(-geometry) %>% 
+  data.frame() %>% 
+  separate(id, into=c("kdecluster", "season", "id", "year", "cluster")) %>% 
+  group_by(kdecluster, season) %>% 
+  summarize(area.mn = mean(area), 
+            area.sd = sd(area)) %>% 
+  ungroup()
+
+#11. Peak at effects of cluster & season on homerange area----
+l1 <- lme4::lmer(area ~ kdecluster*season + (1|id), kd.out, na.action = "na.fail")
+MuMIn::dredge(l1)
+summary(l1)
+
+ggplot(filter(kd.out, area < 10000)) +
+  geom_boxplot(aes(x=season, y=log(area), fill=factor(kdecluster)))
