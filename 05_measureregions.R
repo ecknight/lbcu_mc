@@ -24,7 +24,7 @@ clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
 #3. Import & wrangle daily locations----
 #filter out migration (not stopovers)
 dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(id %in% dat$id,
+  dplyr::filter(id %in% clust$id,
                 !(season %in% c("springmig", "fallmig") & stopover==0),
                 winter!="wintermig") %>% 
   mutate(seasoncluster = ifelse(winter!="other", str_sub(winter, -1, -1), stopovercluster),
@@ -78,8 +78,9 @@ for(i in c(1:length(inds))){
 
 #9. save----
 kd.out <- kd.sp %>% 
-  mutate(area = round(area)/100) %>% 
-  separate(id, into=c("kdecluster", "season", "id", "year", "cluster"))
+  mutate(area = round(area)/100, 
+         rad = round(sqrt(area/pi))) %>% 
+  separate(id, into=c("kdecluster", "season", "bird", "year", "cluster"), remove=FALSE)
 
 write_sf(kd.out, "gis/shp/kde_individual.shp")
 kd.out <- read_sf("gis/shp/kde_individual.shp")
@@ -88,11 +89,13 @@ kd.out <- read_sf("gis/shp/kde_individual.shp")
 kd.sum <- kd.out %>% 
   dplyr::select(-geometry) %>% 
   data.frame() %>% 
-  separate(id, into=c("kdecluster", "season", "id", "year", "cluster")) %>% 
-  group_by(kdecluster, season) %>% 
+#  group_by(kdecluster, season) %>% 
+#  group_by(season) %>% 
   summarize(area.mn = mean(area), 
             area.sd = sd(area)) %>% 
-  ungroup()
+#  ungroup() %>% 
+  mutate(rad = sqrt(area.mn/pi))
+kd.sum
 
 #11. Peak at effects of cluster & season on homerange area----
 l1 <- lme4::lmer(area ~ kdecluster*season + (1|id), kd.out, na.action = "na.fail")
