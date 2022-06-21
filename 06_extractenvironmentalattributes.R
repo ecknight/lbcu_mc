@@ -10,6 +10,7 @@ options(scipen=99999)
 
 #TO DO: CONSIDER GEOPOTENTIAL HEIGHT####
 #TO DO: CONSIDER CENTER PIVOT####
+#TO DO: FIX RAVEN####
 
 #1. Initialize rgee----
 ee_Initialize(gcs=TRUE)
@@ -114,14 +115,13 @@ for(i in 1:nrow(kde)){
 save.image("gis/TaskList.R")
 
 #17. Download results----
-for(i in 552:nrow(kde)){
+for(i in 1:nrow(kde)){
   
   try(ee_gcs_to_local(task = task.list[[i]], dsn=paste0("gis/output/", kde$id[i], ".csv")))
 
 }
 
 #18. Read in results----
-#val.gee <- data.frame()
 files <- list.files("gis/output")
 
 dat <- data.frame()
@@ -139,13 +139,15 @@ covs <- dat %>%
               st_coordinates() %>% 
               data.frame() %>% 
               cbind(data.frame(kde)) %>% 
-              dplyr::select(-geometry)) %>% 
+              dplyr::select(id, area, rad)) %>% 
   mutate(change_norm = ifelse(is.na(change_norm), 0, change_norm),
          occurrence = ifelse(is.na(occurrence), 0, occurrence),
          recurrence = ifelse(is.na(recurrence), 0, recurrence),
-         seasonality = ifelse(is.na(seasonality), 0, seasonality)) %>% 
-  rename(covrop = remapped,
-         covbuilt = remapped_1)
+         seasonality = ifelse(is.na(seasonality), 0, seasonality),
+         raven = ifelse(is.na(raven), 0, raven)) %>% 
+  rename(covcrop = remapped,
+         covbuilt = remapped_1) %>% 
+  separate(id, into=c("kdecluster", "season", "id", "year", "cluster"))
 
 #20. Save-----
 write.csv(covs, "Data/LBCU_environvars.csv", row.names = FALSE)
