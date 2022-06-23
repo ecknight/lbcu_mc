@@ -14,7 +14,7 @@ dat <- read.csv("Data/LBCU_environvars.csv") %>%
 
 #2. Visualize----
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(built), fill=region))
+  geom_boxplot(aes(x=season, y=built, fill=region))
 
 ggplot(dat) +
   geom_boxplot(aes(x=season, y=crops, fill=region))
@@ -26,7 +26,8 @@ ggplot(dat) +
   geom_boxplot(aes(x=season, y=log(flooded_vegetation), fill=region))
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=change_norm, fill=region))
+  geom_boxplot(aes(x=season, y=change_norm, fill=region)) +
+  geom_hline(aes(yintercept=0), linetype="dashed")
 
 ggplot(dat) +
   geom_boxplot(aes(x=season, y=occurrence, fill=region))
@@ -38,13 +39,16 @@ ggplot(dat) +
   geom_boxplot(aes(x=season, y=seasonality, fill=region))
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(covcrop+0.001), fill=region))
+  geom_boxplot(aes(x=season, y=log(covcrop+0.001), fill=region)) +
+  geom_hline(aes(yintercept=0), linetype="dashed")
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(covbuilt+0.001), fill=region))
+  geom_boxplot(aes(x=season, y=log(covbuilt+0.001), fill=region)) +
+  geom_hline(aes(yintercept=0), linetype="dashed")
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(conv+0.001), fill=region))
+  geom_boxplot(aes(x=season, y=log(conv+0.001), fill=region)) +
+  geom_hline(aes(yintercept=0), linetype="dashed")
 
 ggplot(dat) +
   geom_boxplot(aes(x=season, y=pdsi, fill=region))
@@ -54,7 +58,9 @@ boot <- 100
 
 set.seed(1234)
 season <- unique(dat$season)
-out.list <- data.frame()
+vars <- c("crops.s", "grass.s", "built.s", "water.s", "wchange.s", "recur.s", "conv.s", "drought.s")
+npmanova.list <- data.frame()
+t.list <- data.frame()
 for(i in 1:length(season)){
   
   season.i <- season[i]
@@ -83,8 +89,7 @@ for(i in 1:length(season)){
     
     a.i <- adonis(vars.i ~ dat.i$region, method="euclidean", parallel = 4)
     
-    #6. Save info----
-    out.list <- data.frame(f = a.i[["aov.tab"]]$F.Model[1],
+    npmanova.list <- data.frame(f = a.i[["aov.tab"]]$F.Model[1],
                            r2 = a.i[["aov.tab"]]$R2[1],
                            p = a.i[["aov.tab"]]$`Pr(>F)`[1]) %>% 
       cbind(t(a.i$coefficients[2,])) %>% 
@@ -93,13 +98,35 @@ for(i in 1:length(season)){
              westn = '2') %>% 
       mutate(boot=j,
              season = season.i) %>% 
-      rbind(out.list)
+      rbind(npmanova.list)
+    
+    #6. T-test----
+    for(k in 1:length(vars)){
+      var.k <- vars[k]
+      
+      dat.k <- dat.i %>% 
+        dplyr::select(region, var.k)
+      colnames(dat.k) <- c("region", "var")
+      dat.k$var <- dat.k$var[,1]
+      
+      m.i <- t.test(var ~ region, data=dat.k, var.equal=FALSE)
+      
+      t.list <- data.frame(t = m.i$statistic,
+                               df = m.i$parameter,
+                               p = m.i$p.value) %>% 
+        mutate(boot=j,
+               season = season.i,
+               var = var.k) %>% 
+        rbind(t.list)
+      
+    }
+    
   }
 
 }
 
-#7. Summarize----
-out.sum <- out.list %>% 
+#7. Summarize NPMANOVA----
+npmanova.sum <- npmanova.list %>% 
   group_by(season) %>% 
   summarize(p = mean(p),
             r2 = mean(r2),
@@ -112,43 +139,35 @@ out.sum <- out.list %>%
             conv = mean(conv.s),
             drought = mean(drought.s)) %>% 
   ungroup()
-out.sum
+npmanova.sum
 
-out.covs <- out.list %>% 
+npmanova.covs <- npmanova.list %>% 
   pivot_longer(crops.s:drought.s, names_to = "var", values_to="val")
 
-ggplot(out.covs) +
+ggplot(npmanova.covs) +
   geom_hline(aes(yintercept=0), linetype = "dashed") +
   geom_boxplot(aes(x=var, y=val, fill=season))
 
-#8. Test-----
-dat.l <- dat %>% 
-  mutate(crops.s = scale(crops),
-         grass.s =scale(grass),
-         built.s = scale(built),
-         water.s = scale(flooded_vegetation),
-         wchange.s = scale(change_norm),
-         recur.s = scale(recurrence),
-         conv.s = scale(conv),
-         drought.s = scale(pdsi))
+#8. Summarize t-test-----
+t.sum <- t.list %>% 
+  group_by(var, season) %>% 
+  summarize(t = mean(t),
+            df = mean(df),
+            p = mean(p)) %>% 
+  ungroup() %>% 
+  dplyr::filter(p < 0.05)
+t.sum
 
-#Linear regression
-nd <- dat %>% 
-  dplyr::select(season, region, id, year) %>% 
-  unique()
+ggplot(t.list %>% 
+         right_join(t.sum)) +
+  geom_point(aes(x=var, y=p, colour=season))
 
-m1 <- lmer(drought.s ~ season*region + (1|id), data=dat.l, na.action="na.fail", REML=FALSE)
-summary(m1)
-dredge(m1)
-plot(m1)
-p1 <- data.frame(p = predict(m1, newdata=nd)) %>% 
-  cbind(nd)
 
-ggplot(p1) +
-  geom_boxplot(aes(x=season, y=p, colour=region))
 
-#Two-way anova
-dat.a <- dat.l %>% 
+
+
+#ANOVA####
+dat.a <- dat %>% 
  group_by(id, season) %>%
  sample_n(1) %>%
  ungroup() %>%
@@ -159,13 +178,14 @@ dat.a <- dat.l %>%
          wchange.s = scale(change_norm),
          recur.s = scale(recurrence),
          conv.s = scale(conv),
-         drought.s = scale(pdsi))
+         drought.s = scale(pdsi)) 
 
 ggplot(dat.a) +
-  geom_boxplot(aes(x=season, y=drought.s, colour=region))
+  geom_boxplot(aes(x=season, y=change_norm, colour=region))
 
-m2 <- aov(crops.s ~ region + season + region:season, data = dat.a)
+m2 <- aov(drought.s ~ region + season + region:season, data = dat.a)
 summary.aov(m2)
-plot(m2)
+plot(m2)[[1]]
 
-TukeyHSD(m2, which = "region:season")
+TukeyHSD(m2, which = "region:season")$'region:season'[c(1,14,23,28),]
+
