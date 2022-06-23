@@ -4,7 +4,7 @@ library(data.table)
 
 options(scipen=9999)
 
-#TO DO: CONSIDER USING A FALL YEAR OF DATA####
+#TO DO: CONSIDER USING A FULL YEAR OF DATA####
 
 #1. Import data----
 dat.raw <- read.csv("Data/LBCUMCLocations.csv")
@@ -96,6 +96,8 @@ dat.out <- rbindlist(dat.kde) %>%
   separate(season, into=c("coord", "season")) %>% 
   pivot_wider(names_from=coord, values_from=value)
 
+write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
+
 #9. Look at variation----
 dat.sum <- dat.out %>% 
   group_by(id, season, nclust, kdecluster) %>% 
@@ -122,4 +124,3 @@ ggplot(dat.mean) +
 
 ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
 
-write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
