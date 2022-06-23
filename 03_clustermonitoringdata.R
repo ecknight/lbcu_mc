@@ -19,7 +19,8 @@ track.raw <- read.csv("Data/LBCUKDEClusters.csv")
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
 
 bbs <- bbs_data[["bird"]] %>% 
-  dplyr::filter(AOU==2640)
+  dplyr::filter(AOU==2640,
+                Year >= 1970)
 
 routes <- bbs %>% 
   dplyr::select(RouteDataID) %>%
