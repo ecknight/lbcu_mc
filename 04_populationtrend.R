@@ -7,8 +7,6 @@ library(gridExtra)
 
 source("functions.R")
 
-#TO DO: CHANGE INTERPRETATION TO TRAJECTORY INSTEAD OF TREND####
-
 #1. Load clusters for BBS routes with LBCU on them----
 clust.j <- read.csv("Data/LBCUBBSClusters.csv") 
 
