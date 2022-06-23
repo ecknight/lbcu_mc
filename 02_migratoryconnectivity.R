@@ -641,8 +641,8 @@ ggplot(sum) +
 #  geom_smooth(aes(x=nclust, y=r.s), colour="red") +
 #  geom_smooth(aes(x=nclust, y=f), colour="black") +
  geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
- geom_boxplot(aes(x=nclust, y=r.s, group=nclust), colour="red") +
-  geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black") +
+# geom_boxplot(aes(x=nclust, y=r.s, group=nclust), colour="red") +
+#  geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black") +
   facet_wrap(~season)
 
 ggsave(filename="figs/MC.jpeg", width=12, height=5)
