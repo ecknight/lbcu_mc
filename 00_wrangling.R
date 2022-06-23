@@ -6,9 +6,9 @@ library(ggmap)
 
 options(scipen=9999)
 
-#1. Read in data and filter out individuals that don't have locations for both seasons
+#1. Read in data and filter out individuals that don't have locations for both seasons, individuals on atlantic coast
 dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(!id %in% c(46768277, 33088, 129945787))
+  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927))
 
 #1. Breeding ground means----
 breed.mn <- dat %>% 
@@ -19,7 +19,7 @@ breed.mn <- dat %>%
             days=n()) %>% 
   ungroup() %>% 
   mutate(season="breed",
-         cluster=1) 
+         cluster=1)
 
 #2. Wintering ground means----
 winter.mn <- dat %>% 
@@ -71,10 +71,10 @@ for(i in 1:length(ids)){
   
   ggplot(mn.i) +
 #    geom_path(aes(x=X, y=Y)) +
-    geom_point(aes(x=X, y=Y, colour = days), size=3, alpha = 0.7) +
-    scale_colour_viridis_c() +
+    geom_point(aes(x=X, y=Y, colour = season), size=3, alpha = 0.7) +
+    scale_colour_viridis_d() +
     facet_wrap(~year)
   
-  ggsave(filename=paste0("Figs/Days/", ids[i], ".jpeg"))
+#   ggsave(filename=paste0("Figs/MC/", ids[i], ".jpeg"))
   
 }
