@@ -3,6 +3,7 @@ library(vegan)
 library(lme4)
 library(MuMIn)
 library(rstatix)
+library(ggridges)
 
 options(scipen=99999)
 
@@ -14,44 +15,38 @@ dat <- read.csv("Data/LBCU_environvars.csv") %>%
 
 #2. Visualize----
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=built, fill=region))
+  geom_density_ridges(aes(y=season, x=built, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=crops, fill=region))
+  geom_density_ridges(aes(y=season, x=crops, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=grass, fill=region))
+  geom_density_ridges(aes(y=season, x=grass, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(flooded_vegetation), fill=region))
+  geom_density_ridges(aes(y=season, x=flooded_vegetation, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=change_norm, fill=region)) +
+  geom_density_ridges(aes(y=season, x=change_norm, fill=region), alpha=0.3)
   geom_hline(aes(yintercept=0), linetype="dashed")
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=occurrence, fill=region))
+  geom_density_ridges(aes(y=season, x=occurrence, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=recurrence, fill=region))
+  geom_density_ridges(aes(y=season, x=recurrence, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=seasonality, fill=region))
+  geom_density_ridges(aes(y=season, x=seasonality, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(covcrop+0.001), fill=region)) +
-  geom_hline(aes(yintercept=0), linetype="dashed")
+  geom_density_ridges(aes(y=season, x=covcrop, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(covbuilt+0.001), fill=region)) +
-  geom_hline(aes(yintercept=0), linetype="dashed")
+  geom_density_ridges(aes(y=season, x=conv, fill=region), alpha=0.3)
 
 ggplot(dat) +
-  geom_boxplot(aes(x=season, y=log(conv+0.001), fill=region)) +
-  geom_hline(aes(yintercept=0), linetype="dashed")
-
-ggplot(dat) +
-  geom_boxplot(aes(x=season, y=pdsi, fill=region))
+  geom_density_ridges(aes(y=season, x=pdsi, fill=region), alpha=0.3)
 
 #3. Set up bootstraps & season loop----
 boot <- 100
@@ -125,6 +120,8 @@ for(i in 1:length(season)){
 
 }
 
+write.csv(npmanova.list, "Data/NPMANOVA.csv", row.names = FALSE)
+
 #7. Summarize NPMANOVA----
 npmanova.sum <- npmanova.list %>% 
   group_by(season) %>% 
@@ -145,8 +142,12 @@ npmanova.covs <- npmanova.list %>%
   pivot_longer(crops.s:drought.s, names_to = "var", values_to="val")
 
 ggplot(npmanova.covs) +
+  geom_density_ridges(aes(x=val, y=var, fill=season), alpha=0.3) +
+  geom_vline(aes(xintercept=0), linetype = "dashed")
+
+
   geom_hline(aes(yintercept=0), linetype = "dashed") +
-  geom_boxplot(aes(x=var, y=val, fill=season))
+  geom_boxplot(aes(x=season, y=val, fill=var))
 
 #8. Summarize t-test-----
 t.sum <- t.list %>% 
@@ -161,31 +162,3 @@ t.sum
 ggplot(t.list %>% 
          right_join(t.sum)) +
   geom_point(aes(x=var, y=p, colour=season))
-
-
-
-
-
-#ANOVA####
-dat.a <- dat %>% 
- group_by(id, season) %>%
- sample_n(1) %>%
- ungroup() %>%
-  mutate(crops.s = scale(crops),
-         grass.s =scale(grass),
-         built.s = scale(built),
-         water.s = scale(flooded_vegetation),
-         wchange.s = scale(change_norm),
-         recur.s = scale(recurrence),
-         conv.s = scale(conv),
-         drought.s = scale(pdsi)) 
-
-ggplot(dat.a) +
-  geom_boxplot(aes(x=season, y=change_norm, colour=region))
-
-m2 <- aov(drought.s ~ region + season + region:season, data = dat.a)
-summary.aov(m2)
-plot(m2)[[1]]
-
-TukeyHSD(m2, which = "region:season")$'region:season'[c(1,14,23,28),]
-
