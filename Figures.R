@@ -277,49 +277,86 @@ ggsave(grid.arrange(plot.map, plot.bar, plot.index, legend,
 
 #5. Behavioural attributes----
 
-#5a. Migration timing----
+#5a. Get data----
+dat.mig <- read.csv("Data/MigrationStopovers.csv") %>% 
+  rename(Region = region)
+dat.mig$season <- factor(dat.mig$season, levels=c("fallmig", "springmig"),
+                         labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
+dat.mig$Region <- factor(dat.mig$Region, levels=c("west", "east"), labels=c("West", "East"))
+
 dat.dur <- read.csv("Data/MigrationTiming.csv") %>% 
   rename(Region = region)
 dat.dur$season <- factor(dat.dur$season, levels=c("fallmig", "springmig"),
                          labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
 dat.dur$Region <- factor(dat.dur$Region, levels=c("west", "east"), labels=c("West", "East"))
 
+#5b. Departure----
 plot.dep <- ggplot(dat.dur) +
   geom_density_ridges(aes(x=depart, y=season, fill=Region), alpha = 0.2) + 
   my.theme +
-  xlab("Day of migration season") +
+  xlab("Day of migration departure season") +
   ylab("") +
-  ggtitle("Migration departure") +
   theme(legend.position = "none")
 
+#5c. Arrival----
 plot.arr <- ggplot(dat.dur) +
   geom_density_ridges(aes(x=arrive, y=season, fill=Region), alpha = 0.2) + 
   my.theme +
-  xlab("Day of migration season") +
+  xlab("Day of migration arrival season") +
   ylab("") +
-  ggtitle("Migration arrival") +
-  theme(legend.position = "none",
-        axis.text.y = element_blank())
+  theme(axis.text.y = element_blank())
 #plot.arr
 
+#5d. Duration----
 plot.dur <- ggplot(dat.dur) +
   geom_density_ridges(aes(x=duration, y=season, fill=Region), alpha = 0.2) + 
   my.theme +
   xlab("Days of migration") +
   ylab("") +
-  ggtitle("Migration duration") +
-  theme(axis.text.y = element_blank())
+  theme(legend.position = "none")
 #plot.arr
 
-plot.behav <- grid.arrange(plot.dep, plot.arr, plot.dur, 
-             widths = c(4,3,4), heights = c(4),
-             layout_matrix = rbind(c(1,2,3)))
+#5e. Stopovers----
+plot.stop <- ggplot(dat.mig) +
+  geom_density_ridges(aes(x=n, y=season, fill=Region), alpha = 0.2, stat="binline") + 
+  my.theme +
+  xlab("Number of migration stopovers") +
+  ylab("") +
+  theme(axis.text.y = element_blank())
+#plot.stop
 
-ggsave(plot.behav, filename="Figs/Fig5Behave.jpeg", width = 12, height = 4)
+#5f. Put together----
+plot.behav <- grid.arrange(plot.dep, plot.arr, plot.dur, plot.stop,
+             widths = c(4,4), heights = c(4,4),
+             layout_matrix = rbind(c(1,2), c(3,4)))
 
-#6. SUMMARY STATS####
+ggsave(plot.behav, filename="Figs/Fig5Behave.jpeg", width = 10, height = 6)
 
-#6a. Dataset----
+#6. Environmental attributes----
+
+#6a. Wrangle----
+np <- read.csv("Data/NPMANOVA.csv") %>% 
+  pivot_longer(crops.s:drought.s, names_to = "var", values_to="val") 
+np$var <- factor(np$var, levels=c("water.s", "recur.s", "wchange.s", "grass.s", "conv.s", "crops.s", "built.s", "drought.s"),
+                 labels=c("Wetland", "Water\nrecurrence", "Water\nchange", "Grassland", "Grassland\nconversion", "Cropland", "Urban", "Drought"))
+np$season <- factor(np$season, levels=c("breed", "fallmig", "winter", "springmig"),
+                    labels = c("Breed", "Postbreeding\nmigration", "Nonbreeding", "Prebreeding\nmigration"))
+
+#6b. Plot----
+plot.np <- ggplot(np) +
+  geom_density_ridges(aes(x=val, y=var, fill=season), alpha=0.3) +
+  geom_vline(aes(xintercept=0), linetype = "dashed") +
+  my.theme +
+  xlab("Strength of effect on region classification (west to east)") +
+  ylab("") +
+  scale_fill_viridis_d(name="Season")
+
+ggsave(plot.np, filename="Figs/Fig6NPMANOVA.jpeg", width = 8, height=8)
+
+
+#7. SUMMARY STATS####
+
+#7a. Dataset----
 raw.raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
   dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927))
 
@@ -366,7 +403,7 @@ raw %>%
 #Number of summarized locations per season
 table(locs$season)
 
-#6b. Clustering----
+#7b. Clustering----
 clust.raw <- read.csv("Data/LBCUKDEClusters.csv")
 
 clust.sum <- clust.raw %>% 
@@ -382,7 +419,7 @@ clust.sum %>%
   dplyr::filter(n==1,
                 season=="breed")
 
-#6c. MC----
+#7c. MC----
 mc.raw <- read.csv("Data/LBCUMigConnectivity.csv")
 
 #across numbers of clusters
@@ -406,7 +443,7 @@ mc.raw %>%
             MClow = mean(MClow),
             MChigh = mean(MChigh))
 
-#6d. Trend----
+#7d. Trend----
 clust <- read.csv("Data/LBCUBBSClusters.csv") 
 
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
