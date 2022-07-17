@@ -38,9 +38,10 @@ dat.dur <- raw %>%
   dplyr::filter(!is.na(duration)) %>% 
   ungroup() %>% 
   dplyr::filter(duration < 70)
+#Remove two outliers that are due to gaps in transmission
 
 write.csv(dat.dur, "Data/MigrationTiming.csv", row.names = FALSE)
-#Remove two outliers that are due to gaps in transmission
+
 
 #4. Wrangle number of stopovers/home ranges----
 dat.mig <- raw %>% 
@@ -49,6 +50,8 @@ dat.mig <- raw %>%
   summarize(n = max(stopovercluster, na.rm=TRUE)) %>% 
   ungroup() %>% 
   mutate(n = ifelse(is.infinite(n), 0, n))
+
+write.csv(dat.mig, "Data/MigrationStopovers.csv", row.names = FALSE)
 
 dat.wint <- raw %>% 
   dplyr::filter(season=="winter", winter!="wintermig") %>% 
@@ -135,70 +138,15 @@ plot(m3)
 #Stopovers
 m4 <- glmer(n ~ region*season + (1|year) + (1|id), data=dat.mig, na.action="na.fail", family="poisson")
 dredge(m4)
-m5 <- glmer(n ~ region + season + (1|year) + (1|id), data=dat.mig, na.action="na.fail", family=poisson)
-dredge(m5)
-summary(m5)
-plot(m5)
+m4 <- glmer(n ~ region + season + (1|year) + (1|id), data=dat.mig, na.action="na.fail", family=poisson)
+summary(m4)
+plot(m4)
 
 #Home range
 dat.hr.w <- dat.hr %>% 
   dplyr::filter(season=="winter")
 
-m6 <- glmer(area ~ region + (1|id) + (1|year), data=dat.hr.w, na.action="na.fail", family=Gamma)
-dredge(m6)
-plot(m6)
-summary(m6)
-
-#Need to think about this....
-
-
-
-
-#8. Playing with other things----
-
-#Carry over effects
-ggplot(dat.dur) +
-  geom_point(aes(x=depart, y=duration, colour=region)) +
-  facet_wrap(region~season, scales="free")
-
-ggplot(dat.dur) +
-  geom_point(aes(x=arrive, y=duration, colour=region)) +
-  facet_wrap(region~season, scales="free")
-
-ggplot(dat.dur) +
-  geom_point(aes(x=depart, y=arrive, colour=region)) +
-  facet_wrap(region~season, scales="free")
-
-m3 <- lmer(duration ~ depart*region + depart*season + (1|year/id), na.action="na.fail", data=dat.dur)
-dredge(m3)
-
-m4 <- lmer(duration ~ arrive*region + arrive*season + (1|year/id), na.action="na.fail", data=dat.dur)
-dredge(m4)
-
-#Link to environmental factors
-raw.cov <- read.csv("Data/LBCU_environvars.csv") %>% 
-  mutate(region = case_when(kdecluster==1 ~ "east", 
-                            kdecluster==2 ~ "west"),
-         conv = covcrop + covbuilt) %>% 
-  group_by(region, id, year, season) %>% 
-  summarize(crops = mean(crops),
-            flooded_vegetation = mean(flooded_vegetation),
-            grass = mean(grass),
-            occurrence = mean(occurrence),
-            pdsi = mean(pdsi),
-            recurrence = mean(recurrence),
-            seasonality = mean(seasonality),
-            conv = mean(conv)) %>% 
-  ungroup()
-
-dat.cov <- dat.mig %>% 
-  left_join(raw.cov) %>% 
-  left_join(raw.cov %>% 
-              dplyr::filter(season=="winter") %>% 
-              rename(crops.w = crops, flooded_vegetation.w = flooded_vegetation, grass.w = grass, occurrence.w = occurrence, pdsi.w = pdsi, recurrence.w = recurrence, seasonality.w = seasonality, conv.w = conv) %>% 
-              dplyr::select(-season))
-  
-ggplot(dat.cov) +
-  geom_smooth(aes(x=recurrence.w, y=duration, colour=season)) +
-  geom_point(aes(x=recurrence.w, y=duration, colour=season)) +
-  facet_grid(region ~ season, scales="free")
+m5 <- glmer(area ~ region + (1|id) + (1|year), data=dat.hr.w, na.action="na.fail", family=Gamma)
+dredge(m5)
+plot(m5)
+summary(m5)
