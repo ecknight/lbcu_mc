@@ -4,40 +4,13 @@ library(data.table)
 
 options(scipen=9999)
 
-#TO DO: CONSIDER USING A FULL YEAR OF DATA####
-
 #1. Import data----
-dat.raw <- read.csv("Data/LBCUMCLocations.csv")
+dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
+  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927))
 
-#2. Wrangle data to longest duration winter & stopover location for each individual----
-dat.days <- dat.raw %>% 
-  group_by(id, year, season) %>% 
-  arrange(-days) %>% 
-  mutate(cluster.days = row_number()) %>% 
-  ungroup()
-
-dat.days %>% 
-  group_by(season, cluster.days) %>% 
-  summarize(mean = mean(days), 
-            sd = sd(days),
-            max = max(days),
-            min = min(days))
-
-ggplot(dat.days) +
-  geom_histogram(aes(x=days)) +
-  facet_grid(cluster.days ~ season)
-
-# dat <- dat.days %>% 
-# #  dplyr::filter(season %in% c("breed", "winter")) %>% 
-#   dplyr::filter(cluster.days==1)
-
-dat <- dat.days
-
-table(dat$season)
-
-#3. Use only birds with known breeding & wintering location---
+#2. Use only birds with known breeding & wintering location---
 #ID birds with breeding and wintering ground locations
-dat.n <- dat  %>% 
+birds <- dat  %>% 
   dplyr::filter(season %in% c("breed", "winter")) %>% 
   group_by(id, season) %>% 
   summarize(n=n()) %>% 
@@ -46,24 +19,42 @@ dat.n <- dat  %>%
   dplyr::filter(n==2) %>% 
   ungroup()
 
-#4. Set # of bootstraps & set up loop----
+dat.birds <- dat %>% 
+  dplyr::filter(id %in% birds$id)
+
+#3. Set # of bootstraps & set up loop----
 boot <- 100
 
 dat.kde <- list()
 set.seed(1)
 for(i in 1:boot){
   
-  #5. Pick one point for each season for each individual & make it wide----
-  dat.i <- dat %>% 
-    dplyr::filter(id %in% dat.n$id) %>% 
-#    dplyr::filter(season %in% c("breed", "winter")) %>% 
-    group_by(id, season) %>% 
+  #4. Pick day of year to start at----
+  day.i <- round(runif(1, 1, 365))
+  
+  #5. Pick one year of data for each bird----
+  dat.i <- dat.birds %>% 
+    arrange(id, date) %>% 
+    group_by(id) %>% 
+    mutate(day = row_number()) %>% 
+    dplyr::filter(doy==day.i) %>% 
     sample_n(1) %>% 
-    dplyr::select(id, season, X, Y) %>% 
-    pivot_wider(id_cols=id, names_from=season, values_from=X:Y) %>% 
+    ungroup() %>% 
+    dplyr::select(id, day) %>% 
+    rename(start = day) %>% 
+    mutate(end = start + 364) %>% 
+    right_join(dat.birds) %>% 
+    arrange(id, date) %>% 
+    group_by(id) %>% 
+    mutate(day = row_number()) %>% 
+    dplyr::filter(day >= start & day <= end) %>% 
+    mutate(day = row_number()) %>% 
+    ungroup() %>% 
+    dplyr::select(id, day, X, Y) %>% 
+    pivot_wider(id_cols=id, names_from=day, values_from=X:Y) %>% 
     data.frame()
   
-  #8. KDE with incomplete data clustering----
+  #6. KDE with incomplete data clustering----
   clusters <- c(2:6)
   
   kde.cluster <- list()
@@ -78,6 +69,7 @@ for(i in 1:boot){
     
   }
   
+  #7. Save loop output----
   dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
     pivot_wider(id_cols=id, names_from=nclust, values_from=clusters, names_prefix="kde_") %>% 
     left_join(dat.i) %>% 
@@ -91,36 +83,32 @@ print(paste0("Finished bootstrap ", i, " of ", boot))
 
 #8. Wrangle output----
 dat.out <- rbindlist(dat.kde) %>% 
-  pivot_longer(cols=c(X_breed:Y_winter),
-               names_to="season", values_to="value") %>% 
-  separate(season, into=c("coord", "season")) %>% 
+  pivot_longer(cols=c(X_1:Y_365),
+               names_to="day", values_to="value") %>% 
+  separate(day, into=c("coord", "day")) %>% 
   pivot_wider(names_from=coord, values_from=value)
 
-write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
+write.csv(dat.out, "Data/LBCUKDEClusters_year.csv", row.names=FALSE)
 
-#9. Look at variation----
+#9. Look at group membership----
+locs <- read.csv("Data/LBCUMCLocations.csv")
+
+dat.clust <- dat.out %>% 
+  dplyr::select(id, nclust, kdecluster, boot) %>% 
+  unique() %>% 
+  left_join(locs)
+
+ggplot(dat.clust) +
+  geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
+  facet_grid(season~nclust) +
+  scale_colour_viridis_d()
+
+#10. Look at variation----
 dat.sum <- dat.out %>% 
-  group_by(id, season, nclust, kdecluster) %>% 
+  group_by(id, nclust, kdecluster) %>% 
   summarize(n=n()) %>% 
   ungroup()
 
 ggplot(dat.sum) +
   geom_histogram(aes(x=n)) +
-  facet_grid(season~nclust)
-
-#10. Plot----
-dat.mean <- track.raw %>% 
-#dat.mean <- dat.out %>% 
-  dplyr::filter(season=="breed") %>% 
-  group_by(id, season, nclust) %>% 
-  summarize(X = mean(X, na.rm=FALSE), 
-            Y = mean(Y, na.rm=FALSE),
-            kdecluster = round(mean(kdecluster))) %>% 
-  ungroup()
-
-ggplot(dat.mean) +
-  geom_point(aes(x=X, y=Y, colour=factor(kdecluster)))
-  facet_grid(season ~ nclust, scales="free_y")
-
-ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
-
+  facet_grid(~nclust)
