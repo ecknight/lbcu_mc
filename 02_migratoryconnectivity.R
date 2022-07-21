@@ -9,7 +9,7 @@ library(MigConnectivity)
 library(ebirdst)
 
 #1. Load clusters for BBS routes with LBCU on them----
-dat <- read.csv("Data/LBCUKDEClusters.csv") %>% 
+dat <- read.csv("Data/LBCUKDEClusters_year.csv") %>% 
   dplyr::filter(!is.na(X))
 
 #2. Extract relative abundance information from eBird----
