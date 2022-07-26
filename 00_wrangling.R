@@ -8,7 +8,7 @@ options(scipen=9999)
 
 #1. Read in data and filter out individuals that don't have locations for both seasons, individuals on atlantic coast
 dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927))
+  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872))
 
 #1. Breeding ground means----
 breed.mn <- dat %>% 
