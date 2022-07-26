@@ -4,8 +4,6 @@ library(data.table)
 
 options(scipen=9999)
 
-#TO DO: CONSIDER USING A FULL YEAR OF DATA####
-
 #1. Import data----
 dat.raw <- read.csv("Data/LBCUMCLocations.csv")
 
@@ -96,8 +94,6 @@ dat.out <- rbindlist(dat.kde) %>%
   separate(season, into=c("coord", "season")) %>% 
   pivot_wider(names_from=coord, values_from=value)
 
-write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
-
 #9. Look at variation----
 dat.sum <- dat.out %>% 
   group_by(id, season, nclust, kdecluster) %>% 
@@ -108,19 +104,35 @@ ggplot(dat.sum) +
   geom_histogram(aes(x=n)) +
   facet_grid(season~nclust)
 
-#10. Plot----
-dat.mean <- track.raw %>% 
-#dat.mean <- dat.out %>% 
-  dplyr::filter(season=="breed") %>% 
+#10. Get main cluster id----
+dat.mean <- dat.out %>% 
+#  dplyr::filter(season=="breed") %>% 
   group_by(id, season, nclust) %>% 
   summarize(X = mean(X, na.rm=FALSE), 
             Y = mean(Y, na.rm=FALSE),
             kdecluster = round(mean(kdecluster))) %>% 
   ungroup()
 
-ggplot(dat.mean) +
-  geom_point(aes(x=X, y=Y, colour=factor(kdecluster)))
+#11. Look at # of individuals per cluster----
+dat.n <- dat.mean %>% 
+  dplyr::filter(season=="breed") %>% 
+  group_by(nclust, kdecluster) %>% 
+  summarize(n=n()) %>% 
+  dplyr::filter(n < 5)
+
+#12. Remove nclust with < 5 individuals in a cluster----
+dat.final <- dat.out %>% 
+  dplyr::filter(!nclust %in% dat.n$nclust)
+
+#13. Plot----
+ggplot(dat.mean %>% dplyr::filter(!nclust %in% dat.n$nclust)) +
+  geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
   facet_grid(season ~ nclust, scales="free_y")
 
 ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
+
+#14. Save----
+write.csv(dat.final, "Data/LBCUKDEClusters.csv", row.names=FALSE)
+#dat.out <- read.csv("Data/LBCUKDEClusters.csv")
+
 
