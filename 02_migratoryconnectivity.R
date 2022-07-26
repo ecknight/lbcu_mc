@@ -9,16 +9,16 @@ library(MigConnectivity)
 library(ebirdst)
 
 #1. Load clusters for BBS routes with LBCU on them----
-dat.raw <- read.csv("Data/LBCUKDEClusters.csv") %>% 
+dat<- read.csv("Data/LBCUKDEClusters.csv") %>% 
   dplyr::filter(!is.na(X))
 
 #2. Find dominant cluster assignment for each individual in each season----
-dat <- dat.raw %>% 
-  group_by(id, nclust, season) %>% 
-  summarize(kdecluster= round(mean(kdecluster)),
-            X = mean(X),
-            Y = mean(Y)) %>% 
-  ungroup()
+# dat <- dat.raw %>% 
+#   group_by(id, nclust, season) %>% 
+#   summarize(kdecluster= round(mean(kdecluster)),
+#             X = mean(X),
+#             Y = mean(Y)) %>% 
+#   ungroup()
 
 #2. Extract relative abundance information from eBird----
 #set_ebirdst_access_key("e7ld1bagh8n1")
@@ -34,8 +34,8 @@ dat.abun <- raster::extract(ebd, dat.sf, na.rm=TRUE) %>%
   cbind(dat)
 
 abun <- dat.abun %>% 
-#  group_by(boot, nclust, kdecluster, season) %>% 
-  group_by(nclust, kdecluster, season) %>% 
+  group_by(boot, nclust, kdecluster, season) %>% 
+#  group_by(nclust, kdecluster, season) %>% 
   summarize(breeding = mean(breeding, na.rm=TRUE),
             postbreeding_migration = mean(postbreeding_migration, na.rm=TRUE),
             nonbreeding = mean(nonbreeding, na.rm=TRUE),
@@ -44,21 +44,21 @@ abun <- dat.abun %>%
   ungroup()
 
 #3. Set up bootstrap loop----
-#boot <- max(dat$boot)
-boot <- 1
+boot <- max(dat$boot)
+boot <- 5
 
 mantel.out <- list()
 mc.out <- list()
 set.seed(1)
 for(i in 1:boot){
   
-  # dat.i <- dat %>% 
-  #   dplyr::filter(boot==i)
-  dat.i <- dat
+  dat.i <- dat %>%
+    dplyr::filter(boot==i)
+  #dat.i <- dat
   
-  # abun.i <- abun %>% 
-  #   dplyr::filter(boot==i)
-  abun.i <- abun
+  abun.i <- abun %>%
+    dplyr::filter(boot==i)
+  #abun.i <- abun
   
   #4. Set up loop through # of clusters---
   clusters <- unique(dat$nclust)
@@ -955,8 +955,6 @@ mantel.out[[i]] <- rbindlist(mantel.list)
 mc.out[[i]] <- mc.df
 
 print(paste0("Finished bootstrap ", i, " of ", boot))
-    
-    
   
 }
 
@@ -997,22 +995,22 @@ sum %>%
 
 ggplot(results) +
   geom_point(aes(x=nclust, y=MC)) +
-  geom_(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
+  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
   facet_grid(originseason~targetseason)
 
 ggplot(sum) +
-  geom_point(aes(x=nclust, y=mc.s), colour="blue") +
+#  geom_point(aes(x=nclust, y=mc.s), colour="blue") +
 #  geom_point(aes(x=nclust, y=r.s), colour="red") +
 #  geom_point(aes(x=nclust, y=f), colour="black") +
 #  geom_smooth(aes(x=nclust, y=mc.s), colour="blue") +
 #  geom_smooth(aes(x=nclust, y=r.s), colour="red") +
 #  geom_smooth(aes(x=nclust, y=f), colour="black") +
-# geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
+ geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
 # geom_boxplot(aes(x=nclust, y=r.s, group=nclust), colour="red") +
 #  geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black") +
   facet_wrap(originseason~targetseason)
 
-ggsave(filename="figs/MC.jpeg", width=12, height=5)
+#ggsave(filename="figs/MC.jpeg", width=12, height=5)
 
 #19. Summarize across seasons----
 sum.sum <- sum %>% 
@@ -1035,13 +1033,13 @@ ggplot(sum.sum) +
 #  geom_smooth(aes(x=nclust, y=r.s), colour="red") +
 #  geom_smooth(aes(x=nclust, y=mc.s), colour="blue") +
 #  geom_smooth(aes(x=nclust, y=f), colour="black") +
-  geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
-  geom_boxplot(aes(x=nclust, y=r.s, group=nclust), colour="red") +
-  geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black")
+  geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue")
+#  geom_boxplot(aes(x=nclust, y=r.s, group=nclust), colour="red") +
+#  geom_boxplot(aes(x=nclust, y=f, group=nclust), colour="black")
 
 sum.sum %>% 
   dplyr::filter(votemc==1) %>% 
   group_by(nclust) %>% 
   summarize(n=n())
 
-#2 clusters is optimal
+#6 clusters is optimal
