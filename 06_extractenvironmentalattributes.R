@@ -27,7 +27,6 @@ ee_check()
 
 #4. Read in shapefile of HRs and get centroid----
 kde <- read_sf("gis/shp/kde_individual.shp") %>% 
-  mutate(id = paste(kdecluster, season, id, year, cluster, sep="-")) %>% 
   st_make_valid() %>% 
   st_centroid()
 
@@ -74,30 +73,30 @@ for(i in 1:nrow(kde)){
   #11. Get centroid and send to gee----
   kde.i <- kde[i,]
   data <- sf_as_ee(kde.i)
-  
-  #12. Buffer----
-  buffer_points <- function(feature){
-    properties <- c("Date", "ID", "Radius", "Type", "date_millis", "ptID", "ptIDn", "X", "Y", "timestamp", "uniq")
-    new_geometry <- feature$geometry()$buffer(kde.i$rad*1000)
-    ee$Feature(new_geometry)$copyProperties(feature, properties)
-  }
-  
-  data.buff <- data$map(buffer_points)
-  
-  #15. Extract mean values---
-  stack.mn <- stack$reduceRegions(reducer=ee$Reducer$mean(), 
-                                  collection=data.buff,
-                                  scale=30)
-  
-  #16. Export the values----
-  task_vector <- ee_table_to_gcs(collection=stack.mn,
-                                 bucket="lbcu", 
-                                 fileFormat = "CSV",
-                                 fileNamePrefix = kde.i$id[i])
-  task_vector$start()
-  task.list[[i]] <- task_vector
-  ee_monitoring(task.list[[i]], max_attempts=1000)
-#  ee_gcs_to_local(task = task_vector, dsn=paste0("gis/output/", kde.i$id[i], ".csv"))
+
+#   #12. Buffer----
+   buffer_points <- function(feature){
+     properties <- c("Date", "ID", "Radius", "Type", "date_millis", "ptID", "ptIDn", "X", "Y", "timestamp", "uniq")
+     new_geometry <- feature$geometry()$buffer(kde.i$rad*1000)
+     ee$Feature(new_geometry)$copyProperties(feature, properties)
+   }
+
+   data.buff <- data$map(buffer_points)
+
+   #15. Extract mean values---
+   stack.mn <- stack$reduceRegions(reducer=ee$Reducer$mean(),
+                                   collection=data.buff,
+                                   scale=30)
+
+   #16. Export the values----
+   task_vector <- ee_table_to_gcs(collection=stack.mn,
+                                  bucket="lbcu",
+                                  fileFormat = "CSV",
+                                  fileNamePrefix = kde.i$id[i])
+   task_vector$start()
+   task.list[[i]] <- task_vector
+# #  ee_monitoring(task.list[[i]], max_attempts=1000)
+# #  ee_gcs_to_local(task = task_vector, dsn=paste0("gis/output/", kde.i$id[i], ".csv"))
   
   #17. Get Raven density----
   kde.ebd <- kde.i %>% 
@@ -133,7 +132,10 @@ for(i in 1:length(files)){
 }
 
 #19. Join to other data and tidy----
-covs <- dat %>% 
+covs <- dat  %>% 
+  separate(id, into=c("kdecluster", "season", "kdecluster1", "season1", "birdid", "year", "cluster", "year1", "cluster1")) %>% 
+  dplyr::select(-kdecluster1, -season1, -year1, -cluster1) %>% 
+  mutate(id=paste(kdecluster, season, birdid, year, cluster, sep="-")) %>% 
   left_join(raven) %>% 
   left_join(kde %>% 
               st_coordinates() %>% 
@@ -146,8 +148,7 @@ covs <- dat %>%
          seasonality = ifelse(is.na(seasonality), 0, seasonality),
          raven = ifelse(is.na(raven), 0, raven)) %>% 
   rename(covcrop = remapped,
-         covbuilt = remapped_1) %>% 
-  separate(id, into=c("kdecluster", "season", "id", "year", "cluster"))
+         covbuilt = remapped_1)
 
 #20. Save-----
 write.csv(covs, "Data/LBCU_environvars.csv", row.names = FALSE)
