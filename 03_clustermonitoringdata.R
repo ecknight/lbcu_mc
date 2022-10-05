@@ -40,7 +40,7 @@ bbs.sf <- routes %>%
          type="bbs")
 
 #3. Set # of clusters---
-clusters <- 2
+clusters <- 3
 
 #B. PICK ALGORITHM####
 
@@ -57,6 +57,7 @@ dat <- track.raw %>%
   mutate(fold = ceiling(row_number()/(n()/10)))
 
 #3. Set up k-fold----
+set.seed(1234)
 out.k <- list()
 for(i in 1:k){
   
@@ -67,7 +68,6 @@ for(i in 1:k){
     dplyr::filter(fold==i)
   
   #4. KNN----
-  set.seed(i)
   knn.k <- dat.test %>% 
     cbind(data.frame(knn1 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=1, prob=TRUE))) %>% 
     cbind(data.frame(knn2 = knn(train=dat.train[,c("X", "Y")], test=dat.test[,c("X", "Y")], cl=dat.train$kdecluster, k=2, prob=TRUE))) %>% 
@@ -162,6 +162,7 @@ out %>%
 #1. Set up bootstrap loop----
 boot <- max(track.raw$boot)
 
+set.seed(1234)
 knn.out <- list()
 svm.out <- list()
 for(i in 1:boot){
@@ -177,7 +178,7 @@ for(i in 1:boot){
     dplyr::select(id, X, Y, type)
   
   #4. KNN----
-  knn.i <- knn(train=track.i[,c("X", "Y")], test=bbs.i[,c("X", "Y")], cl=track.i$kdecluster, k=1, prob=TRUE)
+  knn.i <- knn(train=track.i[,c("X", "Y")], test=bbs.i[,c("X", "Y")], cl=track.i$kdecluster, k=7, prob=TRUE)
   
   knn.out[[i]] <- data.frame(knncluster=knn.i,
                              knnprob=attr(knn.i, "prob"),
@@ -242,14 +243,15 @@ track.final <- track.raw %>%
             kdecluster = round(mean(kdecluster))) %>% 
   ungroup()
 
-
 ggplot(knn.final) +
   geom_point(aes(x=X, y=Y, colour=factor(knncluster))) +
-  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3)
+  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3) +
+  facet_wrap(~kdecluster)
 
 ggplot(svm.final) +
   geom_point(aes(x=X, y=Y, colour=factor(svmcluster))) +
-  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3)
+  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3) +
+  facet_wrap(~kdecluster)
 
 #15. Calculate MCP area for BBSbayes-----
 sp <- SpatialPointsDataFrame(coords=cbind(svm.final$X, svm.final$Y), 
