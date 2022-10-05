@@ -48,7 +48,7 @@ dat.n <- dat  %>%
 boot <- 100
 
 dat.kde <- list()
-set.seed(1)
+set.seed(1234)
 for(i in 1:boot){
   
   #5. Pick one point for each season for each individual & make it wide----
