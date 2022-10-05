@@ -6,6 +6,9 @@ library(mapdata)
 library(maptools)
 library(ggpubr)
 library(ggridges)
+library(paletteer)
+
+#TO DO: STANDARDIZE POINT BORDER COLOUR
 
 my.theme <- theme_classic() +
   theme(text=element_text(size=12, family="Arial"),
@@ -30,7 +33,15 @@ map.theme <- theme_nothing() +
 nam <- map_data("usa") %>% 
   rbind(map_data("worldHires", "Canada")) %>% 
   rbind(map_data("worldHires", "Mexico")) %>% 
-  mutate(group = paste0(region,"-", group))
+  mutate(group = paste0(region,"-", group),
+         subregion = ifelse(is.na(subregion), "Mainland", subregion)) %>%  
+  dplyr::filter(!str_sub(subregion, -6, -1)%in%c("Island", "island"),
+                long < 0)
+
+seasons <- paletteer_d("nord::victory_bonds", n=4) 
+seasons
+
+groups <- c("#0432fd", "#c2a0ff", "#fe3517")
 
 #1. Study area figure----
 #Get data and wrangle for deployment locations----
@@ -39,20 +50,112 @@ dep <- read.csv("/Users/ellyknight/Documents/SMBC/Analysis/lbcu_exploration/Data
   dplyr::filter(row_number()==1) %>% 
   ungroup()
 
+#make up study IDs
+study <- data.frame(study = unique(dep$study)) %>% 
+  arrange(study) %>% 
+  mutate(studyid = c(6,4,9,7,2,3,5,1,8)) %>% 
+  left_join(dep) %>% 
+  mutate(longr = round(long/2)*2,
+         latr = round(lat/2)*2) %>% 
+  group_by(study, studyid, longr, latr) %>% 
+  summarize(n=n()) %>% 
+  ungroup()
+
+#get BirdLife range
+range <- read_sf("gis/LBCUrange.shp") %>% 
+  mutate(season = case_when(SEASONA==2 ~ "Breeding",
+                            SEASONA==3 ~ "Stationary\nnonbreeding")) %>% 
+  dplyr::filter(!is.na(season))
+
 plot.sa <- ggplot() +
-  geom_polygon(data=nam, aes(x=long, y=lat, group=group), colour = "gray85", fill = "gray75", size=0.3) +
-  coord_sf(xlim=c(-170, -30), expand = FALSE, crs=4326) +
-  geom_point(data=dep, aes(x=long, y=lat, fill=study), pch=21, colour="grey85", alpha = 0.5, size=5) +
+  geom_polygon(data=nam, aes(x=long, y=lat, group=group), colour = "gray90", fill = "gray80", size=0.3) +
+  geom_sf(data=range, aes(colour=season), fill="white", alpha = 0.3) +
+  coord_sf(xlim=c(-140, -50), ylim=c(14, 73), expand = FALSE, crs=4326) +
+  geom_jitter(data=study, aes(x=longr, y=latr, fill=factor(studyid), size=n), pch=21, colour="grey65", alpha = 0.7, width=1, height=1) +
   xlab("") +
   ylab("") +
   map.theme +
-  theme(legend.position = "right")
+  theme(legend.position = "right") +
+  scale_size(range = c(2, 7), name="Individuals\ntagged") +
+  scale_fill_paletteer_d("ggthemes_ptol::qualitative", 9, direction=1, name="Dataset ID") +
+  scale_colour_manual(values=as.character(seasons[c(2,4)]), name="Seasonal\nrange")
+#plot.sa
 
 ggsave(plot.sa, filename="Figs/Fig1StudyArea.jpeg", width=8, height=6)
 
-#2. Clustering figure----
+#2. All tracks figure----
+raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
+  arrange(id, year, doy)
 
-#2a. Wrangle----
+all.ids <- raw %>% 
+  dplyr::select(id, year) %>% 
+  unique() %>% 
+  group_by(id) %>% 
+  sample_n(1) %>% 
+  ungroup()
+
+pts.spring <- raw %>% 
+  dplyr::filter(lead(segment)=="depart" & season=="winter" |
+                segment=="arrive" & season=="breed", 
+                !is.na(season),
+                !(season=="breed" & lat < 35))
+
+all.spring <- raw %>% 
+  dplyr::filter(season=="springmig",
+                segment=="migration") %>% 
+  rbind(pts.spring) %>% 
+  arrange(id, year, doy)
+  
+
+pts.fall <- raw %>% 
+  dplyr::filter(lead(segment)=="depart" & season=="breed" |
+                  segment=="arrive" & season=="winter", 
+                !is.na(season))
+
+all.fall <- raw %>% 
+  dplyr::filter(season=="fallmig",
+                segment=="migration") %>% 
+  rbind(pts.fall) %>% 
+  arrange(id, year, doy)
+
+plot.spring <- ggplot() +
+  geom_polygon(data=nam, aes(x=long, y=lat, group=group), colour = "gray90", fill = "gray80", size=0.3) +
+  coord_sf(xlim=c(-140, -50), ylim=c(14, 73), expand = FALSE, crs=4326) +
+  geom_line(data=all.spring, aes(x=lon, y=lat, group=id), colour="grey30") +
+  geom_point(data=pts.spring, aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
+  xlab("") +
+  ylab("") +
+  map.theme +
+  ggtitle("Prebreeding migration") +
+  scale_fill_manual(values=as.character(seasons[c(2,4)]))
+#plot.spring
+
+plot.fall <- ggplot() +
+  geom_polygon(data=nam, aes(x=long, y=lat, group=group), colour = "gray90", fill = "gray80", size=0.3) +
+  coord_sf(xlim=c(-140, -50), ylim=c(14, 73), expand = FALSE, crs=4326) +
+  geom_line(data=all.fall, aes(x=lon, y=lat, group=id), colour="grey30") +
+  geom_point(data=pts.fall, aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
+  xlab("") +
+  ylab("") +
+  map.theme +
+  ggtitle("Postbreeding migration")  +
+  scale_fill_manual(values=as.character(seasons[c(2,4)]))
+#plot.fall
+
+plot.legend <- ggplot() +
+  geom_point(data=sample_n(pts.fall, 10), aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
+  scale_fill_manual(values=as.character(seasons[c(2,4)]), name="Season", labels=c("Breeding", "Stationary\nnonbreeding"))
+#plot.legend
+legend <- cowplot::get_legend(plot.legend)
+
+ggsave(grid.arrange(plot.spring, plot.fall, legend,
+                    widths = c(4,4,1),
+                    heights = c(4),
+                    layout_matrix = rbind(c(1,2,3))), filename="Figs/Fig2Tracks.jpeg", width=12, height=6)
+
+#3. Clustering figure----
+
+#3a. Wrangle----
 clust.raw <- read.csv("Data/LBCUKDEClusters.csv")
 
 clust <- clust.raw %>% 
@@ -72,11 +175,13 @@ clust.ll <- clust  %>%
   cbind(clust %>% 
           dplyr::filter(!is.na(X)))
 
+write.csv(dplyr::filter(clust.ll, nclust=="3 regions"), "Data/LBCUclusterlocs.csv", row.names=FALSE)
+
 clust.ll$season <- factor(clust.ll$season, levels=c("breed", "fallmig", "winter", "springmig"),
-                             labels=c("Breeding", "Postbreeding\nmigration", "Nonbreeding", "Prebreeding\nmigration"))
-clust.ll$nclust <- factor(clust.ll$nclust, levels=c(2,3,4,5,6), labels=c("2 regions", "3 regions", "4 regions", "5 regions", "6 regions"))
+                             labels=c("Breeding", "Postbreeding\nmigration\nstopover", "Nonbreeding", "Prebreeding\nmigration\nstopover"))
+clust.ll$nclust <- factor(clust.ll$nclust, levels=c(2,3,4,5,6), labels=c("2 groups", "3 groups", "4 groups", "5 groups", "6 groups"))
   
-#2b. Plot----
+#3b. Clustering plot----
 plot.clust <- ggplot(clust.ll) +
   geom_polygon(data = nam, aes(x=long, y = lat, group = group), fill = "gray75", color="gray90", size=0.3) +
   geom_point(aes(x=lon, y=lat, fill=factor(kdecluster)), size = 3, pch=21, colour="grey90") +
@@ -86,105 +191,46 @@ plot.clust <- ggplot(clust.ll) +
   ylab("") +
   map.theme +
   theme(legend.position = "bottom") +
-  scale_fill_viridis_d(name="Region") +
+  scale_fill_paletteer_d("ggthemes_ptol::qualitative", 5, direction=1, name="Group") +
   guides(fill=guide_legend(nrow=1,byrow=TRUE)) +
   theme(panel.spacing = unit(0.2, "lines"))
 
-ggsave(plot.clust, filename="Figs/Fig2Cluster.jpeg", width = 8, height = 10)
-
-#3. Connectivity figure----
-mn <- read.csv("Data/LBCUMCLocations.csv")
-
-#3a. Maps---
-plot.bw <- ggplot(mn %>% dplyr::filter(season%in% c("breed", "winter"))) +
-  geom_polygon(data = nam, aes(x=long, y = lat, group = group), fill = "gray75", color="gray90", size=0.3) +
-  geom_path(aes(x=lon, y=lat, group=id), colour="grey20") +
-  geom_point(aes(x=lon, y=lat, fill=season), pch=21, colour="grey20", size=2.5, alpha = 0.7) +
-  coord_sf(xlim=c(min(mn$lon)-5, max(mn$lon)+5), ylim = c(min(mn$lat)-5, max(mn$lat)+5), expand = FALSE, crs=4326) +
-  scale_fill_manual(values=c("cyan4", "darkgoldenrod1")) +
-  xlab("") +
-  ylab("") +
-  map.theme +
-  ggtitle("Breeding to nonbreeding")
-#plot.bw
-
-plot.bf <- ggplot(mn %>% dplyr::filter(season %in% c("breed", "fallmig"))) +
-  geom_polygon(data = nam, aes(x=long, y = lat, group = group), fill = "gray75", color="gray90", size=0.3) +
-  geom_path(aes(x=lon, y=lat, group=id), colour="grey20") +
-  geom_point(aes(x=lon, y=lat, fill=season), pch=21, colour="grey20", size=2.5, alpha = 0.7) +
-  coord_sf(xlim=c(min(mn$lon)-5, max(mn$lon)+5), ylim = c(min(mn$lat)-5, max(mn$lat)+5), expand = FALSE, crs=4326) +
-  scale_fill_manual(values=c("cyan4", "darkred")) +
-  xlab("") +
-  ylab("") +
-  map.theme +
-  ggtitle("Breeding to postbreeding migration")
-#plot.bf
-
-plot.bs <- ggplot(mn %>% dplyr::filter(season %in% c("breed", "springmig"))) +
-  geom_polygon(data = nam, aes(x=long, y = lat, group = group), fill = "gray75", color="gray90", size=0.3) +
-  geom_path(aes(x=lon, y=lat, group=id), colour="grey20") +
-  geom_point(aes(x=lon, y=lat, fill=season), pch=21, colour="grey20", size=2.5, alpha = 0.7) +
-  coord_sf(xlim=c(min(mn$lon)-5, max(mn$lon)+5), ylim = c(min(mn$lat)-5, max(mn$lat)+5), expand = FALSE, crs=4326) +
-  scale_fill_manual(values=c("cyan4", "darkolivegreen4")) +
-  xlab("") +
-  ylab("") +
-  map.theme +
-  ggtitle("Breeding to prebreeding migration")
-#plot.bs
-
-#3b. Connectivity----
+#3c. Connectivity wrangling----
 results <- read.csv("Data/LBCUMigConnectivity.csv")
 
 sum <- results %>% 
-  dplyr::select(MC, MClow, MChigh, nclust, season, boot) %>% 
+  dplyr::select(MC, MClow, MChigh, nclust, originseason, targetseason, boot) %>% 
   unique() %>% 
-  group_by(season, nclust) %>% 
+  group_by(originseason, targetseason, nclust) %>% 
   summarize(MC = mean(MC),
             MClow = mean(MClow),
             MChigh = mean(MChigh)) %>% 
-  ungroup() %>% 
-  rbind(results %>% 
-          dplyr::select(MC, MClow, MChigh, nclust, season, boot) %>% 
-          unique() %>% 
-          group_by(nclust) %>% 
-          summarize(MC = mean(MC),
-                    MClow = mean(MClow),
-                    MChigh = mean(MChigh)) %>% 
-          ungroup() %>% 
-          mutate(season="Combined"))
+  ungroup()
 
-mc.bf <- ggplot(sum %>% dplyr::filter(season=="fallmig")) +
+sum$targetseason <- factor(sum$targetseason, levels=c("breed", "fallmig", "winter", "springmig"),
+                          labels=c("Breeding", "Postbreeding\nmigration\nstopover", "Nonbreeding", "Prebreeding\nmigration\nstopover"))
+sum$originseason <- factor(sum$originseason, levels=c("breed","winter"),
+                           labels=c("Breeding", "Nonbreeding"))
+
+#3d. Connectivity plot----
+plot.mc <- ggplot(sum) +
   geom_point(aes(x=nclust, y=MC)) +
   geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
   my.theme +
   ylab("Strength of migratory connectivity") +
-  xlab("") +
-  ylim(c(0,1))
+  xlab("Number of groups") +
+  ylim(c(0,1)) +
+  facet_grid(targetseason ~ originseason) +
+  theme(strip.background = element_blank(),
+        strip.text.y = element_blank()) +
+  ggtitle("Reference season for migratory\nconnectivity estimation")
 
-mc.bw <- ggplot(sum %>% dplyr::filter(season=="winter")) +
-  geom_point(aes(x=nclust, y=MC)) +
-  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
-  my.theme +
-  ylab("") +
-  xlab("Number of regions") +
-  ylim(c(0,1))
-
-mc.bs <- ggplot(sum %>% dplyr::filter(season=="springmig")) +
-  geom_point(aes(x=nclust, y=MC)) +
-  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
-  my.theme +
-  ylab("") +
-  xlab("") +
-  ylim(c(0,1))
-
-#3c. Put it together----
-plot.mc <- grid.arrange(plot.bf, plot.bw, plot.bs, mc.bf, mc.bw, mc.bs,
-             widths=c(2,2,2),
-             heights=c(4,2),
-             layout_matrix = rbind(c(1,2,3),
-                                   c(4,5,6)))
-
-ggsave(plot.mc, filename="Figs/Fig3MC.jpeg", width=10, height=8)
+#3e. Put together----
+ggsave(grid.arrange(plot.clust, plot.mc,
+                    widths = c(3.5,6.5),
+                    heights = c(1,20),
+                    layout_matrix = rbind(c(2,NA),
+                                          c(2,1))), filename="Figs/Fig3Cluster.jpeg", width=10, height=10)
 
 #4. Trend----
 
@@ -196,12 +242,15 @@ trend.list <- read.csv("Data/LBCU_trend_gamye.csv") %>%
   data.frame() %>% 
   rename(lat = Y, lon = X) %>% 
   cbind(read.csv("Data/LBCU_trend_gamye.csv")) %>% 
-  mutate(Region = ifelse(Region==1, "east", "west"))
+  mutate(Region = case_when(Region==2 ~ "West", 
+                            Region==1 ~ "Central",
+                            Region==3 ~ "East"))
 
 trend <- trend.list %>% 
   dplyr::select(Region, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
   unique() %>% 
   rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025')
+trend$Region <- factor(trend$Region, levels=c("West", "Central", "East"))
 
 #4b. BBS Regions----
 clust <- read.csv("Data/LBCUKDEClusters.csv")  %>% 
@@ -216,12 +265,13 @@ clust <- read.csv("Data/LBCUKDEClusters.csv")  %>%
   dplyr::filter(season=="breed",
                 nclust==2) %>% 
   dplyr::select(id, kdecluster, lat, lon) %>% 
-  unique() %>% 
+  unique()  %>% 
+  mutate(Region = case_when(kdecluster==2 ~ "West", 
+                            kdecluster==1 ~ "Central",
+                            kdecluster==3 ~ "East")) %>% 
   left_join(trend %>% 
-              dplyr::select(svmcluster, Trend) %>% 
-              rename(kdecluster = svmcluster) %>% 
-              unique()) %>% 
-  mutate(Region = ifelse(kdecluster==1, "east", "west"))
+              dplyr::select(Region, Trend) %>% 
+              unique())
 
 plot.map <- ggplot(trend.list) +
   geom_polygon(data = nam, aes(x=long, y = lat, group = group), fill = "gray75", color="gray90", size=0.3) +
@@ -231,7 +281,8 @@ plot.map <- ggplot(trend.list) +
   coord_sf(xlim=c(min(trend.list$lon)-5, max(trend.list$lon)+5), ylim = c(min(trend.list$lat)-5, max(trend.list$lat)+5), expand = FALSE, crs=3857) +
   map.theme +
   xlab("") +
-  ylab("")
+  ylab("") +
+  geom_text(aes(x=-92.5, y=57, label="A"), size=10)
 plot.map
 
 #4c. Trend----
@@ -242,12 +293,15 @@ plot.bar <- ggplot(trend) +
   scale_colour_gradient2(high="blue", low="red") +
   ylab("Population trend") +
   my.theme +
-  theme(legend.position="none")
+  theme(legend.position="none") +
+  geom_text(aes(x=3.4, y=1.8, label="B"), size=10)
 plot.bar
 
 #4d. Trajectories----
 indices <- read.csv("Data/LBCU_indices_gamye.csv") %>% 
-  mutate(Region = ifelse(Region==1, "east", "west")) %>% 
+  mutate(Region = case_when(Region==2 ~ "West", 
+                            Region==1 ~ "Central",
+                            Region==3 ~ "East")) %>% 
   left_join(trend %>% 
               dplyr::select(Region, Trend) %>% 
               unique())
@@ -258,7 +312,8 @@ plot.index <- ggplot(indices) +
   scale_colour_gradient2(high="blue", low="red", name="Population\ntrend") +
   ylab("Relative abundance index") +
   my.theme +
-  theme(legend.position="none")
+  theme(legend.position="none") +
+  geom_text(aes(x=2020, y=8, label="C"), size=10)
 plot.index
 
 #4e. Legend----
@@ -272,93 +327,273 @@ legend <- get_legend(plot.legend)
 
 #4f. Put together----
 ggsave(grid.arrange(plot.map, plot.bar, plot.index, legend,
-                    widths = c(3,3,3,1), heights = c(3),
-                    layout_matrix = rbind(c(1,2,3,4))), height=4, width=12, units='in', filename="Figs/Fig3Trend.jpeg")
+                    widths = c(3.5,3,3,1), heights = c(3),
+                    layout_matrix = rbind(c(1,2,3,4))), height=4, width=13, units='in', filename="Figs/Fig4Trend.jpeg")
 
 #5. Behavioural attributes----
 
 #5a. Get data----
 dat.mig <- read.csv("Data/MigrationStopovers.csv") %>% 
-  rename(Region = region)
+  rename(Group = region) %>% 
+  mutate(n = as.numeric(n)) %>% 
+  mutate(n = case_when(Group=="west" ~ (n-0.2),
+                       Group=="central" ~ n,
+                       Group=="east" ~ (n + 0.2)))
 dat.mig$season <- factor(dat.mig$season, levels=c("fallmig", "springmig"),
                          labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.mig$Region <- factor(dat.mig$Region, levels=c("west", "east"), labels=c("West", "East"))
+dat.mig$Group <- factor(dat.mig$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East")) 
+
+dat.stop <- read.csv("Data/MigrationStopoverLength.csv") %>% 
+  rename(Group = region) %>% 
+  mutate(n = as.numeric(n)) %>% 
+  mutate(n = case_when(Group=="west" ~ (n-0.2),
+                       Group=="central" ~ n,
+                       Group=="east" ~ (n + 0.2)))
+dat.stop$season <- factor(dat.stop$season, levels=c("fallmig", "springmig"),
+                         labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
+dat.stop$Group <- factor(dat.stop$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East")) 
 
 dat.dur <- read.csv("Data/MigrationTiming.csv") %>% 
-  rename(Region = region)
+  rename(Group = region)
 dat.dur$season <- factor(dat.dur$season, levels=c("fallmig", "springmig"),
                          labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.dur$Region <- factor(dat.dur$Region, levels=c("west", "east"), labels=c("West", "East"))
+dat.dur$Group <- factor(dat.dur$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
+
+dat.dist <- read.csv("Data/MigrationDistance.csv") %>% 
+  rename(Group = region)
+dat.dist$season <- factor(dat.dist$season, levels=c("fallmig", "springmig"),
+                         labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
+dat.dist$Group <- factor(dat.dist$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
+
+dat.rate <- read.csv("Data/MigrationRate.csv") %>% 
+  rename(Group = region)
+dat.rate$season <- factor(dat.rate$season, levels=c("fallmig", "springmig"),
+                          labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
+dat.rate$Group <- factor(dat.rate$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
+
+dat.wint <- read.csv("Data/WinterHRs.csv") %>% 
+  rename(Group = region) %>% 
+  mutate(n = as.numeric(n)) %>% 
+  mutate(n = case_when(Group=="west" ~ (n-0.1),
+                       Group=="central" ~ n,
+                       Group=="east" ~ (n + 0.05)))
+dat.wint$season <- factor(dat.wint$season, levels=c("fallmig", "springmig"),
+                          labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
+dat.wint$Group <- factor(dat.wint$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
+
+dat.hr <- read.csv("Data/WinterHRSize.csv") %>% 
+  rename(Group = region)
+dat.hr$season <- factor(dat.hr$season, levels=c("breed", "fallmig", "winter", "springmig"),
+                          labels=c("Breeding", "Postbreeding\nmigration", "Nonbreeding", "Prebreeding\nmigration"))
+dat.hr$Group <- factor(dat.hr$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
 
 #5b. Departure----
 plot.dep <- ggplot(dat.dur) +
-  geom_density_ridges(aes(x=depart, y=season, fill=Region), alpha = 0.2) + 
+  geom_density_ridges(aes(x=depart, y=season, fill=Group), alpha = 0.4) + 
   my.theme +
   xlab("Day of migration departure season") +
   ylab("") +
+  scale_x_continuous(breaks=c(32, 91, 152, 213), labels=c("Feb", "Apr", "Jun", "Aug")) +
+  scale_fill_manual(values=groups) +
   theme(legend.position = "none")
+plot.dep
 
 #5c. Arrival----
 plot.arr <- ggplot(dat.dur) +
-  geom_density_ridges(aes(x=arrive, y=season, fill=Region), alpha = 0.2) + 
+  geom_density_ridges(aes(x=arrive, y=season, fill=Group), alpha = 0.4) + 
   my.theme +
   xlab("Day of migration arrival season") +
   ylab("") +
-  theme(axis.text.y = element_blank())
-#plot.arr
+  scale_x_continuous(breaks=c(91, 152, 213, 274), labels=c("Apr", "Jun", "Aug", "Oct")) +
+  scale_fill_manual(values=groups) +
+  theme(axis.text.y = element_blank()) +
+  theme(legend.position = "none")
+plot.arr
 
 #5d. Duration----
 plot.dur <- ggplot(dat.dur) +
-  geom_density_ridges(aes(x=duration, y=season, fill=Region), alpha = 0.2) + 
+  geom_density_ridges(aes(x=duration, y=season, fill=Group), alpha = 0.4) + 
   my.theme +
   xlab("Days of migration") +
   ylab("") +
+  scale_fill_manual(values=groups) +
+  theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
-#plot.arr
+plot.dur
 
 #5e. Stopovers----
 plot.stop <- ggplot(dat.mig) +
-  geom_density_ridges(aes(x=n, y=season, fill=Region), alpha = 0.2, stat="binline") + 
+  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4, stat="binline") + 
   my.theme +
   xlab("Number of migration stopovers") +
   ylab("") +
-  theme(axis.text.y = element_blank())
-#plot.stop
+  scale_fill_manual(values=groups) +
+  theme(axis.text.y = element_blank()) +
+  theme(legend.position = "none")
+plot.stop
 
-#5f. Put together----
-plot.behav <- grid.arrange(plot.dep, plot.arr, plot.dur, plot.stop,
-             widths = c(4,4), heights = c(4,4),
-             layout_matrix = rbind(c(1,2), c(3,4)))
+#5f. Stopover duration----
+plot.stopdur <- ggplot(dat.stop) +
+  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4) + 
+  my.theme +
+  xlab("Duration of migration stopovers") +
+  ylab("") +
+  scale_fill_manual(values=groups) +
+  theme(axis.text.y = element_blank()) +
+  theme(legend.position = "none")
+plot.stopdur
 
-ggsave(plot.behav, filename="Figs/Fig5Behave.jpeg", width = 10, height = 6)
+#5f. Distance----
+plot.dist <- ggplot(dat.dist) +
+  geom_density_ridges(aes(x=dist, y=season, fill=Group), alpha = 0.4) + 
+  my.theme +
+  xlab("Migration distance (km)") +
+  ylab("") +
+  scale_fill_manual(values=groups) +
+  theme(axis.text.y = element_blank()) +
+  theme(legend.position = "none")
+plot.dist
+
+#5g. Rate----
+plot.rate <- ggplot(dat.rate) +
+  geom_density_ridges(aes(x=rate, y=season, fill=Group), alpha = 0.4) + 
+  my.theme +
+  xlab("Migration rate (km/day)") +
+  ylab("") +
+  scale_fill_manual(values=groups) +
+  theme(legend.position = "none")
+plot.rate
+
+#5h. Range area----
+plot.hr <- ggplot(dat.hr) +
+  geom_density_ridges(aes(x=log(area), y=season, fill=Group), alpha = 0.4) + 
+  my.theme +
+  xlab("Natural log of use area") +
+  ylab("") +
+  scale_fill_manual(values=groups) +
+  theme(legend.position = "none")
+plot.hr
+
+#5i. Number of wintering ranges----
+plot.wint <- ggplot(dat.wint) +
+  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4, stat="binline") + 
+  my.theme +
+  xlab("Number of wintering home ranges") +
+  ylab("") +
+  scale_fill_manual(values=groups) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  scale_x_continuous(breaks=c(1,2,3), labels=c(1,2,3)) +
+  theme(legend.position = "none")
+plot.wint
+
+#5j. Legend----
+plot.legend <- ggplot(dat.wint) +
+  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4, stat="binline") +
+  scale_fill_manual(values=groups) +
+  theme(legend.position = "right")
+plot.legend
+legend <- cowplot::get_legend(plot.legend)
+
+#5h. Put together----
+plot.behav <- grid.arrange(plot.dep, plot.arr, plot.dur, plot.dist, plot.rate, plot.stopdur, plot.stop, plot.hr, plot.wint, legend,
+                           widths = c(4,3,3,3), heights=c(3,3,3),
+                           layout_matrix=rbind(c(1,2,3,4),
+                                               c(5,6,7,NA),
+                                               c(8,9,10,NA)))
+
+ggsave(plot.behav, filename="Figs/Fig5Behave.jpeg", width = 12, height = 9)
 
 #6. Environmental attributes----
 
-#6a. Wrangle----
-np <- read.csv("Data/NPMANOVA.csv") %>% 
-  pivot_longer(crops.s:drought.s, names_to = "var", values_to="val") 
-np$var <- factor(np$var, levels=c("water.s", "recur.s", "wchange.s", "grass.s", "conv.s", "crops.s", "built.s", "drought.s"),
-                 labels=c("Wetland", "Water\nrecurrence", "Water\nchange", "Grassland", "Grassland\nconversion", "Cropland", "Urban", "Drought"))
-np$season <- factor(np$season, levels=c("breed", "fallmig", "winter", "springmig"),
-                    labels = c("Breed", "Postbreeding\nmigration", "Nonbreeding", "Prebreeding\nmigration"))
+#6a. Wrangle mrpp deltas----
+mrpp <- read.csv("Data/MRPP.csv") %>% 
+  group_by(season, region) %>% 
+  summarize(delta.mn = mean(delta),
+            delta.sd = sd(delta),
+            delta.up = quantile(delta, 0.975),
+            delta.lw = quantile(delta, 0.025)) %>% 
+  ungroup()
 
-#6b. Plot----
-plot.np <- ggplot(np) +
-  geom_density_ridges(aes(x=val, y=var, fill=season), alpha=0.3) +
-  geom_vline(aes(xintercept=0), linetype = "dashed") +
+mrpp$region <- factor(mrpp$region, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
+mrpp$season <- factor(mrpp$season, levels=c("breed", "fallmig", "winter", "springmig"),
+                      labels=c("Breeding home range", "Postbreeding migration\nstopover", "Nonbreeding home range", "Prebreeding migration\nstopover"))
+
+#6b. Wrangle nmds scores----
+scores <- read.csv("Data/NMDSScores.csv") %>% 
+  group_by(season, boot) %>% 
+  mutate(id = row_number()) %>% 
+  ungroup() %>% 
+  group_by(season, region, id) %>% 
+  summarize(x.mn = mean(NMDS1),
+            x.up = quantile(NMDS1, 0.975),
+            x.lw = quantile(NMDS1, 0.025),
+            y.mn = mean(NMDS2),
+            y.up = quantile(NMDS2, 0.975),
+            y.lw = quantile(NMDS2, 0.025)) %>% 
+  ungroup() %>% 
+  dplyr::filter(!(season=="winter" & id==1))
+
+scores$region <- factor(scores$region, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
+scores$season <- factor(scores$season, levels=c("breed", "fallmig", "winter", "springmig"),
+                        labels=c("Breeding home range", "Postbreeding migration\nstopover", "Nonbreeding home range", "Prebreeding migration\nstopover"))
+
+covscores <- read.csv("Data/NMDSCovscores.csv") %>% 
+  group_by(season, cov) %>% 
+  summarize(x.mn = mean(NMDS1),
+            x.up = quantile(NMDS1, 0.975),
+            x.lw = quantile(NMDS1, 0.025),
+            y.mn = mean(NMDS2),
+            y.up = quantile(NMDS2, 0.975),
+            y.lw = quantile(NMDS2, 0.025)) %>% 
+  ungroup()
+
+covscores$season <- factor(covscores$season, levels=c("breed", "fallmig", "winter", "springmig"),
+                      labels=c("Breeding home range", "Postbreeding migration\nstopover", "Nonbreeding home range", "Prebreeding migration\nstopover"))
+covscores$cov <- factor(covscores$cov, levels=c("flooded_vegetation", "seasonality", "recurrence", "change_norm", "grass", "conv", "crops", "built", "pdsi"),
+                       labels=c("Wetland", "Water\nseasonality", "Water\nrecurrence", "Water\nchange", "Grassland", "Grassland\nconversion", "Crop", "Urban", "Drought"))
+
+#6c. Plot----
+plot.mrpp <- ggplot(mrpp) +
+  geom_errorbar(aes(x=region, ymin=delta.lw, ymax=delta.up, colour=region)) +
+  geom_point(aes(x=region, y=delta.mn, colour=region)) +
+  facet_grid(season~.) +
+  scale_colour_manual(values=groups) +
   my.theme +
-  xlab("Strength of effect on region classification (west to east)") +
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        strip.text = element_blank(),
+        strip.background = element_blank()) + 
+  ylab("Within-group MRPP mean")
+#plot.mrpp
+
+plot.nmds <- ggplot() +
+  geom_point(data=scores, aes(x=x.mn, y=y.mn, fill=region), pch=21, size=2) +
+  geom_segment(data=covscores, aes(x=0, y=0, xend=x.mn, yend=y.mn, colour=cov), arrow = arrow(length = unit(0.2, "cm"))) +
+  facet_wrap(.~season, scales="free", ncol=1, strip.position = "right") +
+  scale_fill_manual(values=groups, name="Group") +
+  scale_colour_paletteer_d("ggthemes_ptol::qualitative", 9, direction=1, name="Environmental\nattribute") +
+  my.theme + 
   ylab("") +
-  scale_fill_viridis_d(name="Season")
+  xlab("") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line.x = element_blank(),
+        axis.line.y = element_blank())
+#plot.nmds
 
-ggsave(plot.np, filename="Figs/Fig6NPMANOVA.jpeg", width = 8, height=8)
+plot.covs <- grid.arrange(plot.mrpp, plot.nmds, widths = c(2, 3), heights =c(4),
+             layout_matrix=rbind(c(1,2)))
+
+ggsave(plot.covs, filename="Figs/Fig6NMDSMRPP.jpeg", width = 8, height=10)
 
 
-#7. SUMMARY STATS####
+#8. SUMMARY STATS####
 
-#7a. Dataset----
+#8a. Dataset----
 raw.raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927))
+  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872))
 
 locs.raw <- read.csv("Data/LBCUMCLocations.csv")
 
@@ -400,10 +635,26 @@ raw %>%
             max.yr = max/365,
             min.yr = min/365)
 
+#Histogram of tracking years
+years <- raw %>% 
+  group_by(id) %>% 
+  summarize(n=n()/365) %>% 
+  ungroup()
+  
+
 #Number of summarized locations per season
 table(locs$season)
 
-#7b. Clustering----
+#Number of individuals with spring & fall mig stopovers
+locs %>% 
+  dplyr::filter(season%in%c("springmig", "fallmig")) %>% 
+  dplyr::select(season, id) %>% 
+  unique() %>% 
+  group_by(season) %>% 
+  summarize(n=n()) %>% 
+  ungroup()
+
+#8b. Clustering----
 clust.raw <- read.csv("Data/LBCUKDEClusters.csv")
 
 clust.sum <- clust.raw %>% 
@@ -419,19 +670,25 @@ clust.sum %>%
   dplyr::filter(n==1,
                 season=="breed")
 
-#7c. MC----
+#8c. MC----
 mc.raw <- read.csv("Data/LBCUMigConnectivity.csv")
+
+#across everything
+mc.raw %>% 
+  summarize(MC = mean(MC), 
+            MClow = mean(MClow),
+            MChigh = mean(MChigh))
 
 #across numbers of clusters
 mc.raw %>% 
-  group_by(season) %>% 
+  group_by(originseason, targetseason) %>% 
   summarize(MC = mean(MC),
             MClow = mean(MClow),
             MChigh = mean(MChigh))
 
 #for each number of clusters
 mc.raw %>% 
-  group_by(season, nclust) %>% 
+  group_by(originseason, targetseason, nclust) %>% 
   summarize(MC = mean(MC),
             MClow = mean(MClow),
             MChigh = mean(MChigh))
@@ -443,7 +700,7 @@ mc.raw %>%
             MClow = mean(MClow),
             MChigh = mean(MChigh))
 
-#7d. Trend----
+#8d. Trend----
 clust <- read.csv("Data/LBCUBBSClusters.csv") 
 
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
@@ -458,6 +715,7 @@ bird <- bbs_data[["bird"]] %>%
 route <- bbs_data[["route"]] %>% 
   mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
   inner_join(clust) %>% 
+  dplyr::filter(Year >= 1970) %>% 
   mutate(strat_name=svmcluster,
          rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-")) %>% 
@@ -476,3 +734,132 @@ sd(route$SpeciesTotal)
 
 #Routes per cluster
 table(clust$svmcluster)
+
+#8e. Movement chars----
+dat.mig <- read.csv("Data/MigrationStopovers.csv") 
+dat.dur <- read.csv("Data/MigrationTiming.csv")
+dat.dist <- read.csv("Data/MigrationDistance.csv")
+dat.rate <- read.csv("Data/MigrationRate.csv")
+dat.wint <- read.csv("Data/WinterHRs.csv")
+dat.hr <- read.csv("Data/WinterHRSize.csv")
+
+#Distance
+dat.dist %>% 
+  group_by(region) %>% 
+  summarize(dist= mean(dist))
+
+dat.dist %>% 
+  group_by(region, season) %>% 
+  summarize(dist= mean(dist))
+
+dat.dist %>% 
+  group_by(season) %>% 
+  summarize(dist= mean(dist))
+
+#Duration
+dat.dur %>% 
+  group_by(region) %>% 
+  summarize(dist= mean(duration))
+
+dat.dur %>% 
+  group_by(season) %>% 
+  summarize(dist= mean(duration))
+
+dat.dur %>% 
+  group_by(region, season) %>% 
+  summarize(dist= mean(duration))
+
+#Departure
+dat.dur %>% 
+  group_by(region) %>% 
+  summarize(depart= mean(depart))
+
+dat.dur %>% 
+  group_by(season, region) %>% 
+  summarize(depart= mean(depart))
+
+#Arrival
+dat.dur %>% 
+  group_by(region) %>% 
+  summarize(arrive= mean(arrive))
+
+dat.dur %>% 
+  group_by(season, region) %>% 
+  summarize(arrive= mean(arrive))
+
+#Stopovers
+dat.mig %>% 
+  group_by(region) %>% 
+  summarize(n= mean(n))
+
+dat.mig %>% 
+  group_by(region, season) %>% 
+  summarize(n= mean(n))
+
+dat.mig %>% 
+  group_by(season) %>% 
+  summarize(n= mean(n))
+
+#Rate
+dat.rate %>% 
+  group_by(region) %>% 
+  summarize(rate= mean(rate))
+
+dat.rate %>% 
+  group_by(season, region) %>% 
+  summarize(rate= mean(rate))
+
+dat.rate %>% 
+  group_by(season) %>% 
+  summarize(rate= mean(rate))
+
+#Areas
+dat.hr %>% 
+  group_by(region) %>% 
+  summarize(area= mean(area))
+
+dat.hr %>% 
+  group_by(season, region) %>% 
+  summarize(area= mean(area))
+
+dat.hr %>% 
+  group_by(season) %>% 
+  dplyr::filter(region!="west") %>% 
+  summarize(area= mean(area),
+            sd = sd(area, na.rm=TRUE))
+
+#Distance between wintering hrs
+kd.wint <- read_sf("gis/shp/kde_individual.shp") %>% 
+  dplyr::filter(season=="winter") %>% 
+  st_make_valid() %>% 
+  st_centroid() %>% 
+  st_transform(crs=3857) %>% 
+  mutate(id = paste0(bird, "-", year, "", season)) %>% 
+  arrange(id, cluster)
+
+kd.xy <- st_coordinates(kd.wint)
+
+traj <- as.ltraj(xy=kd.xy[,c("X", "Y")],
+                 id=kd.wint$id,
+                 date=kd.wint$cluster,
+                 typeII=FALSE,
+                 proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
+names(traj) <- unique(kd.wint$id)
+
+dat.traj <- rbindlist(traj, idcol=TRUE) %>% 
+  rename(id='.id', X=x, Y=y) %>% 
+  mutate(id=as.numeric(id)) %>% 
+  arrange(id, date) %>% 
+  dplyr::select(dist) %>% 
+  cbind(kd.wint) %>% 
+  dplyr::filter(!is.na(dist)) %>% 
+  mutate(dist = dist/1000) %>% 
+  mutate(region = case_when(kdecluster==2 ~ "West", 
+                            kdecluster==1 ~ "Central",
+                            kdecluster==3 ~ "East"))
+
+ggplot(dat.traj) +
+  geom_histogram(aes(x=dist, fill=region)) +
+  xlab("Distance between\nsuccessive winter home ranges")
+
+ggsave(filename="Figs/WinteringHomeRangeDistances.jpeg", width = 3, height = 3)
