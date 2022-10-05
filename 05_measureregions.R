@@ -11,7 +11,7 @@ library(MuMIn)
 #PART A: REGIONS####
 
 #1. Set number of clusters----
-n <- 2
+n <- 3
 
 #2. Get dominant cluster id for each bird----
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>% 
@@ -98,7 +98,7 @@ kd.sum <- kd.out %>%
 kd.sum
 
 #11. Peak at effects of cluster & season on homerange area----
-l1 <- lme4::lmer(area ~ kdecluster*season + (1|id), kd.out, na.action = "na.fail")
+l1 <- lme4::lmer(area ~ kdecluster*season + (1|bird), kd.out, na.action = "na.fail")
 MuMIn::dredge(l1)
 summary(l1)
 
