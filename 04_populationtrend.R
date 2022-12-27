@@ -71,7 +71,8 @@ write.csv(indices$data_summary, "Data/LBCU_indices_gamye.csv")
 #8. Calculate trends----
 trends <- generate_trends(indices = indices,
                             slope=TRUE,
-                            Min_year = 1970,
+#                            Min_year = 1970,
+                            Min_year = 2007,
                             Max_year = 2019)
 
 #9. Save output----
@@ -117,4 +118,4 @@ plot.index <- ggplot(indices$data_summary) +
   geom_line(aes(x=Year, y=Index, colour=factor(Region)))
 plot.index
 
-ggsave(grid.arrange(plot.map, plot.bar, plot.index, ncol=3), height=6, width=18, units='in', filename="Figs/Trend.jpeg")
+ggsave(grid.arrange(plot.map, plot.bar, plot.index, ncol=3), height=6, width=18, units='in', filename="Figs/Trend_eBirdwindow.jpeg")
