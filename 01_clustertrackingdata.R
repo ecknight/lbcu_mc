@@ -4,6 +4,8 @@ library(data.table)
 
 options(scipen=9999)
 
+#TO DO: SCALE FROM 0 TO 1
+
 #1. Import data----
 dat.raw <- read.csv("Data/LBCUMCLocations.csv")
 
@@ -44,21 +46,31 @@ dat.n <- dat  %>%
   dplyr::filter(n==2) %>% 
   ungroup()
 
+#4. Scale variables from 0 to 1 for each season----
+dat.scale <- dat %>% 
+  dplyr::filter(id %in% dat.n$id) %>% 
+  group_by(season) %>% 
+  mutate(Xs = (X-min(X))/(max(X)-min(X)),
+         Ys = (Y-min(Y))/(max(Y)-min(Y)),
+         elevs = (elevation-min(elevation))/(max(elevation)-min(elevation)),
+         dists = (distance-min(distance))/(max(distance)-min(distance))) %>% 
+  ungroup()
+
 #4. Set # of bootstraps & set up loop----
-boot <- 100
+boot <- 10
 
 dat.kde <- list()
 set.seed(1234)
 for(i in 1:boot){
   
   #5. Pick one point for each season for each individual & make it wide----
-  dat.i <- dat %>% 
-    dplyr::filter(id %in% dat.n$id) %>% 
-#    dplyr::filter(season %in% c("breed", "winter")) %>% 
+  dat.i <- dat.scale %>% 
+    dplyr::filter(season %in% c("breed", "winter")) %>% 
     group_by(id, season) %>% 
     sample_n(1) %>% 
-    dplyr::select(id, season, X, Y) %>% 
-    pivot_wider(id_cols=id, names_from=season, values_from=X:Y) %>% 
+#    dplyr::select(id, season, Xs, Ys, dists) %>% 
+    dplyr::select(id, season, Ys, dists) %>% 
+    pivot_wider(id_cols=id, names_from=season, values_from=Ys:dists) %>%
     data.frame()
   
   #8. KDE with incomplete data clustering----
@@ -89,7 +101,9 @@ print(paste0("Finished bootstrap ", i, " of ", boot))
 
 #8. Wrangle output----
 dat.out <- rbindlist(dat.kde) %>% 
-  pivot_longer(cols=c(X_breed:Y_winter),
+  # pivot_longer(cols=c(Xs_breed:dists_winter),
+  #              names_to="season", values_to="value") %>% 
+  pivot_longer(cols=c(Ys_breed:dists_winter),
                names_to="season", values_to="value") %>% 
   separate(season, into=c("coord", "season")) %>% 
   pivot_wider(names_from=coord, values_from=value)
@@ -108,10 +122,16 @@ ggplot(dat.sum) +
 dat.mean <- dat.out %>% 
 #  dplyr::filter(season=="breed") %>% 
   group_by(id, season, nclust) %>% 
-  summarize(X = mean(X, na.rm=FALSE), 
-            Y = mean(Y, na.rm=FALSE),
+  # summarize(X = mean(Xs, na.rm=FALSE), 
+  #           Y = mean(Ys, na.rm=FALSE),
+  #           elevation = mean(elevs, na.rm=FALSE),
+  #           distance = mean(dists, na.rm=FALSE),
+  #           kdecluster = round(mean(kdecluster))) %>% 
+  summarize(Ys = mean(Ys, na.rm=FALSE),
+            dists = mean(dists, na.rm=FALSE),
             kdecluster = round(mean(kdecluster))) %>% 
-  ungroup()
+  ungroup() %>% 
+  left_join(dat.scale)
 
 #11. Look at # of individuals per cluster----
 dat.n <- dat.mean %>% 
@@ -126,7 +146,7 @@ dat.final <- dat.out %>%
 
 #13. Plot----
 ggplot(dat.mean %>% dplyr::filter(!nclust %in% dat.n$nclust)) +
-  geom_point(aes(x=X, y=Y, colour=factor(kdecluster))) +
+  geom_point(aes(x=X, y=Y, colour=factor(kdecluster), size=dists)) +
   facet_grid(season ~ nclust, scales="free_y")
 
 ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
