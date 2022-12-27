@@ -146,6 +146,12 @@ write.csv(dat.stop, "Data/MigrationStopoverLength.csv", row.names = FALSE)
 
 #7. Wrangle home range size----
 dat.hr <- read_sf("gis/shp/kde_individual.shp") %>% 
+  st_make_valid() %>% 
+  st_centroid() %>% 
+  st_coordinates() %>% 
+  data.frame() %>% 
+  dplyr::select(X, Y) %>% 
+  cbind(read_sf("gis/shp/kde_individual.shp")) %>% 
   mutate(kdecluster = as.numeric(kdecluster),
          bird = as.numeric(bird),
          year = as.numeric(year)) %>% 
@@ -165,12 +171,14 @@ write.csv(dat.hr, "Data/WinterHRSize.csv", row.names = FALSE)
 dat.wint <- dat.hr %>% 
   dplyr::filter(season=="winter") %>% 
   group_by(season, region, bird, year) %>% 
-  summarize(n=n()) %>% 
+  summarize(n=n(),
+            X = mean(X),
+            Y = mean(Y)) %>% 
   ungroup()
 
 write.csv(dat.wint, "Data/WinterHRs.csv", row.names=FALSE)
 
-#9. Visualize
+#9. Visualize----
 #Departure
 ggplot(dat.dur) +
   geom_boxplot(aes(x=region, y=depart)) +
