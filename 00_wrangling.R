@@ -86,6 +86,7 @@ mn.near <- st_nearest_feature(mn.sf, coast)
 mn.coast <- data.frame(distance = as.numeric(st_distance(mn.sf, coast[mn.near,], by_element = TRUE))) %>% 
   cbind(mn)
 
+#check
 ggplot(mn.coast) +
   geom_point(aes(x=lon, y=lat, colour=distance))
 
@@ -101,9 +102,9 @@ mn.utm <- st_as_sf(mn, coords=c("lon", "lat"), crs=4326) %>%
 write.csv(mn.utm, "Data/LBCUMCLocations.csv", row.names = FALSE)
 
 #9. Visualize----
-ggplot(mn.utm) +
+ggplot(mn.utm %>% dplyr::filter(season!="fallmig")) +
   geom_path(aes(x=X, y=Y, group=id)) +
-  geom_point(aes(x=X, y=Y, colour=season))
+  geom_point(aes(x=X, y=Y, colour=season, size=distance))
 
 ids <- unique(mn.utm$id)
 
