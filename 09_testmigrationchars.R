@@ -11,22 +11,41 @@ options(scipen=99999)
 n <- 3
 
 #1. Get dominant cluster id for each bird----
-clust <- read.csv("Data/LBCUKDEClusters.csv") %>% 
+clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
   dplyr::filter(nclust==n,
-                !is.na(X)) %>% 
-  group_by(id) %>% 
-  summarize(kdecluster = round(mean(kdecluster))) %>% 
+                !is.na(X)) %>%
+  group_by(id) %>%
+  summarize(kdecluster = round(mean(kdecluster))) %>%
   ungroup()
 
 #2. Read in daily estimate data----
 raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) %>% 
+  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872),
+                season=="winter")  %>% 
+  mutate(group = case_when(X >-11000000 ~ "Gulf",
+                           X < -11000000 & X > -12000000 ~ "Inland",
+                           X < -12000000 & X > -13000000 ~ "Baja",
+                           X < -13000000 ~ "Cali")) %>% 
+  dplyr::select(id, year, group) %>% 
+  mutate(group = ifelse(id %in% c(46757899,1418878943,1615638072,1953212678,1953212685,1953212691), "Inland", group)) %>% 
+  unique() %>% 
+  left_join(read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
+              dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872))) %>% 
   left_join(clust) %>% 
+  left_join(group) %>% 
   mutate(region = case_when(kdecluster==1 ~ "central",
                             kdecluster==2 ~ "west",
                             kdecluster==3 ~ "east")) %>%
-  dplyr::filter(!is.na(region)) %>% 
+  dplyr::filter(!is.na(region)) %>%
   arrange(id, date)
+
+ggplot(raw) + 
+  geom_point(aes(x=X, y=Y, colour=region)) +
+  facet_wrap(~season)
+
+ggplot(raw) + 
+  geom_point(aes(x=X, y=Y, colour=group)) +
+  facet_wrap(~season)
 
 #3. Wrangle migration duration----
 dat.dur <- raw %>% 
@@ -34,7 +53,7 @@ dat.dur <- raw %>%
   mutate(season = case_when(season=="breed" ~ "springmig",
                             season=="winter" ~ "fallmig",
                             !is.na(season) ~ season)) %>% 
-  pivot_wider(id_cols=c(region, id, season, year), names_from=segment, values_from=doy) %>% 
+  pivot_wider(id_cols=c(region, group, id, season, year), names_from=segment, values_from=doy) %>% 
   group_by(season) %>% 
   mutate(duration = arrive - depart, 
          arrive2 = arrive - min(arrive, na.rm=TRUE) + 1,
@@ -101,7 +120,7 @@ dat.dist <- dat.traj %>%
                             segment=="arrive" & season=="breed" ~ "springmig",
                             !is.na(season) ~ season)) %>% 
   anti_join(dist.remove) %>% 
-  group_by(region, id, year, season) %>% 
+  group_by(region, group, id, year, season) %>% 
   summarize(dist = sum(dist)) %>% 
   ungroup()
 
@@ -119,7 +138,7 @@ write.csv(dat.rate, "Data/MigrationRate.csv", row.names = FALSE)
 #6. Wrangle number of stopovers/home ranges----
 dat.mig <- raw %>% 
   dplyr::filter(season %in% c("springmig", "fallmig")) %>% 
-  group_by(region, id, year, season) %>% 
+  group_by(region, group, id, year, season) %>% 
   summarize(n = max(stopovercluster, na.rm=TRUE)) %>% 
   ungroup() %>% 
   mutate(n = ifelse(is.infinite(n), 0, n))
@@ -130,7 +149,7 @@ dat.wint <- raw %>%
   dplyr::filter(season=="winter", winter!="wintermig") %>% 
   mutate(year = as.numeric(ifelse(doy < 130, year-1, year)),
          cluster = as.numeric(str_sub(winter, -1, -1))) %>% 
-  group_by(season, region, id, year) %>% 
+  group_by(season, region, group, id, year) %>% 
   summarize(n = max(cluster)) %>% 
   ungroup()
 
@@ -157,6 +176,8 @@ dat.hr <- read_sf("gis/shp/kde_individual.shp") %>%
          year = as.numeric(year)) %>% 
   left_join(clust %>% 
               rename(bird=id)) %>% 
+  left_join(group %>% 
+              rename(bird=id)) %>% 
   data.frame() %>% 
   dplyr::select(-geometry) %>% 
   mutate(region = case_when(kdecluster==1 ~ "central",
@@ -170,7 +191,7 @@ write.csv(dat.hr, "Data/WinterHRSize.csv", row.names = FALSE)
 #8. Wrangle number of wintering home ranges----
 dat.wint <- dat.hr %>% 
   dplyr::filter(season=="winter") %>% 
-  group_by(season, region, bird, year) %>% 
+  group_by(season, region, group, bird, year) %>% 
   summarize(n=n(),
             X = mean(X),
             Y = mean(Y)) %>% 
@@ -231,6 +252,9 @@ ggplot(dat.mig) +
 ggplot(dat.stop) +
   geom_boxplot(aes(x=region, y=n)) +
   facet_wrap(~season)
+
+ggplot(dat.stop) +
+  ggridges::geom_density_ridges(aes(y=season, x=n, fill=region), alpha=0.3)
 
 #Area
 ggplot(dat.hr) +
