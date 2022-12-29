@@ -4,8 +4,6 @@ library(data.table)
 
 options(scipen=9999)
 
-#TO DO: SCALE FROM 0 TO 1
-
 #1. Import data----
 dat.raw <- read.csv("Data/LBCUMCLocations.csv")
 
@@ -30,7 +28,6 @@ ggplot(dat.days) +
 # dat <- dat.days %>% 
 # #  dplyr::filter(season %in% c("breed", "winter")) %>% 
 #   dplyr::filter(cluster.days==1)
-
 dat <- dat.days
 
 table(dat$season)
@@ -46,16 +43,6 @@ dat.n <- dat  %>%
   dplyr::filter(n==2) %>% 
   ungroup()
 
-#4. Scale variables from 0 to 1 for each season----
-dat.scale <- dat %>% 
-  dplyr::filter(id %in% dat.n$id) %>% 
-  group_by(season) %>% 
-  mutate(Xs = (X-min(X))/(max(X)-min(X)),
-         Ys = (Y-min(Y))/(max(Y)-min(Y)),
-         elevs = (elevation-min(elevation))/(max(elevation)-min(elevation)),
-         dists = (distance-min(distance))/(max(distance)-min(distance))) %>% 
-  ungroup()
-
 #4. Set # of bootstraps & set up loop----
 boot <- 10
 
@@ -65,12 +52,11 @@ for(i in 1:boot){
   
   #5. Pick one point for each season for each individual & make it wide----
   dat.i <- dat.scale %>% 
-    dplyr::filter(season %in% c("breed", "winter")) %>% 
+    dplyr::filter(id %in% dat.n$id) %>% 
     group_by(id, season) %>% 
     sample_n(1) %>% 
-#    dplyr::select(id, season, Xs, Ys, dists) %>% 
-    dplyr::select(id, season, Ys, dists) %>% 
-    pivot_wider(id_cols=id, names_from=season, values_from=Ys:dists) %>%
+    dplyr::select(id, season, X, Y, distance) %>% 
+    pivot_wider(id_cols=id, names_from=season, values_from=X:distance) %>%
     data.frame()
   
   #8. KDE with incomplete data clustering----
@@ -79,8 +65,9 @@ for(i in 1:boot){
   kde.cluster <- list()
   for(j in 1:length(clusters)){
     
+    #Select columns for clustering
     dat.j <- dat.i %>% 
-      dplyr::select(-id)
+      dplyr::select(X_springmig, Y_springmig, X_winter, Y_winter, distance_winter)
     kde.j <- ClustImpute(dat.j, clusters[j], nr_iter=100)
     kde.cluster[[j]] <- data.frame(clusters = kde.j$clusters,
                                    nclust = clusters[j],
@@ -101,10 +88,8 @@ print(paste0("Finished bootstrap ", i, " of ", boot))
 
 #8. Wrangle output----
 dat.out <- rbindlist(dat.kde) %>% 
-  # pivot_longer(cols=c(Xs_breed:dists_winter),
-  #              names_to="season", values_to="value") %>% 
-  pivot_longer(cols=c(Ys_breed:dists_winter),
-               names_to="season", values_to="value") %>% 
+  pivot_longer(cols=c(X_breed:Y_winter),
+               names_to="season", values_to="value") %>%
   separate(season, into=c("coord", "season")) %>% 
   pivot_wider(names_from=coord, values_from=value)
 
@@ -120,22 +105,15 @@ ggplot(dat.sum) +
 
 #10. Get main cluster id----
 dat.mean <- dat.out %>% 
-#  dplyr::filter(season=="breed") %>% 
   group_by(id, season, nclust) %>% 
-  # summarize(X = mean(Xs, na.rm=FALSE), 
-  #           Y = mean(Ys, na.rm=FALSE),
-  #           elevation = mean(elevs, na.rm=FALSE),
-  #           distance = mean(dists, na.rm=FALSE),
-  #           kdecluster = round(mean(kdecluster))) %>% 
-  summarize(Ys = mean(Ys, na.rm=FALSE),
-            dists = mean(dists, na.rm=FALSE),
-            kdecluster = round(mean(kdecluster))) %>% 
-  ungroup() %>% 
-  left_join(dat.scale)
+  summarize(X = mean(X, na.rm=FALSE),
+            Y = mean(Y, na.rm=FALSE),
+            kdecluster = round(mean(kdecluster))) %>%
+  ungroup()
 
 #11. Look at # of individuals per cluster----
 dat.n <- dat.mean %>% 
-  dplyr::filter(season=="breed") %>% 
+  dplyr::filter(season=="winter") %>% 
   group_by(nclust, kdecluster) %>% 
   summarize(n=n()) %>% 
   dplyr::filter(n < 5)
@@ -145,9 +123,10 @@ dat.final <- dat.out %>%
   dplyr::filter(!nclust %in% dat.n$nclust)
 
 #13. Plot----
-ggplot(dat.mean %>% dplyr::filter(!nclust %in% dat.n$nclust)) +
-  geom_point(aes(x=X, y=Y, colour=factor(kdecluster), size=dists)) +
-  facet_grid(season ~ nclust, scales="free_y")
+ggplot(dat.final %>% dplyr::filter(season=="breed", nclust == 3)) +
+  geom_point(aes(x=X, y=Y, colour=factor(kdecluster)), size=4) +
+  facet_grid(season ~ nclust, scales="free_y") + 
+  scale_colour_viridis_d()
 
 ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
 
