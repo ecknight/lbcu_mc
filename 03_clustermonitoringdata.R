@@ -13,7 +13,11 @@ options(scipen=9999)
 #A. PREAMBLE####
 
 #1. Import tracking data with training clusters----
-track.raw <- read.csv("Data/LBCUKDEClusters.csv")
+#track.raw <- read.csv("Data/LBCUKDEClusters.csv")
+track.raw <- read.csv("Data/LBCUManualClusters.csv") %>% 
+  mutate(nclust=4,
+         boot=1,
+         kdecluster = factor(group))
 
 #2. Import bbs monitoring data----
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
@@ -40,7 +44,8 @@ bbs.sf <- routes %>%
          type="bbs")
 
 #3. Set # of clusters---
-clusters <- 3
+#clusters <- 3
+clusters <- 4
 
 #B. PICK ALGORITHM####
 
@@ -178,14 +183,14 @@ for(i in 1:boot){
     dplyr::select(id, X, Y, type)
   
   #4. KNN----
-  knn.i <- knn(train=track.i[,c("X", "Y")], test=bbs.i[,c("X", "Y")], cl=track.i$kdecluster, k=7, prob=TRUE)
+  knn.i <- knn(train=track.i[,c("X", "Y")], test=bbs.i[,c("X", "Y")], cl=track.i$kdecluster, k=1, prob=TRUE)
   
   knn.out[[i]] <- data.frame(knncluster=knn.i,
                              knnprob=attr(knn.i, "prob"),
                              boot=i) %>% 
     cbind(bbs.i)
   
-  #5. Nave bayes----
+  #5. Naive bayes----
   set.seed(i)
   svm.out[[i]] <- train(as.factor(kdecluster) ~ X + Y, data=track.i, method="svmLinear") %>% 
     predict(bbs.i) %>% 
@@ -236,34 +241,28 @@ svm.final <- svm.all %>%
 
 #14. Visualize----
 track.final <- track.raw %>% 
-  dplyr::filter(season=="breed", nclust==clusters) %>% 
-  group_by(id, season) %>% 
-  summarize(X = mean(X), 
-            Y = mean(Y),
-            kdecluster = round(mean(kdecluster))) %>% 
-  ungroup()
+  dplyr::filter(season=="breed")
 
-ggplot(knn.final) +
-  geom_point(aes(x=X, y=Y, colour=factor(knncluster))) +
-  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3) +
-  facet_wrap(~kdecluster)
+ggplot(knn.all) +
+  geom_point(aes(x=X, y=Y, colour=knncluster)) +
+  geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3)
 
-ggplot(svm.final) +
+ggplot(svm.all) +
   geom_point(aes(x=X, y=Y, colour=factor(svmcluster))) +
   geom_point(data=track.final, aes(x=X, y=Y, colour=factor(kdecluster)), pch=21, fill="white", size=3) +
   facet_wrap(~kdecluster)
 
 #15. Calculate MCP area for BBSbayes-----
-sp <- SpatialPointsDataFrame(coords=cbind(svm.final$X, svm.final$Y), 
-                               data=data.frame(ID=svm.final$svmcluster),
+sp <- SpatialPointsDataFrame(coords=cbind(knn.all$X, knn.all$Y), 
+                               data=data.frame(ID=knn.all$knncluster),
                                proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
 
 mp <- mcp(sp[,1], percent=100)
 
-svm.area <- data.frame(mp) %>% 
-  rename(svmcluster=id)
+knn.area <- data.frame(mp) %>% 
+  rename(knncluster=id)
 
 #15. Save out----
-write.csv(svm.all, "Data/LBCUBBSClustersAll.csv", row.names = FALSE)
-write.csv(svm.area, "Data/area_weight.csv", row.names = FALSE)
-write.csv(svm.final, "Data/LBCUBBSClusters.csv", row.names = FALSE)
+write.csv(knn.all, "Data/LBCUBBSClustersAll.csv", row.names = FALSE)
+write.csv(knn.area, "Data/area_weight.csv", row.names = FALSE)
+write.csv(knn.final, "Data/LBCUBBSClusters.csv", row.names = FALSE)
