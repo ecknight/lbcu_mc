@@ -2,7 +2,6 @@ library(tidyverse)
 library(sf)
 library(vegan)
 library(ggmap)
-library(rgee)
 
 options(scipen=9999)
 
@@ -47,64 +46,20 @@ stop.mn <- dat %>%
 
 #4. Put together----
 mn <- rbind(breed.mn, winter.mn, stop.mn)
-
 table(mn$season, mn$cluster)
 
-#5. Get elevation----
-ee_Initialize(gcs=TRUE)
-ee_check()
-
-mn.sf <- st_as_sf(mn, coords=c("lon", "lat"), crs=4326)
-mn.ee <- sf_as_ee(mn.sf)
-
-dem <- ee$Image("USGS/GMTED2010")
-
-mn.dem <- ee_extract(
-  x = dem,
-  y = mn.ee,
-  sf = FALSE
-)
-
-#6. Get ecoregion----
-#Shapefile from https://www.epa.gov/eco-research/ecoregions
-
-eco <- read_sf("gis/na_cec_eco_l1/NA_CEC_Eco_Level1.shp")
-
-mn.eco <- mn.sf %>% 
-  st_transform(raster::crs(eco)) %>% 
-  st_intersection(eco) %>% 
-  data.frame() %>% 
-  dplyr::select(-NA_L1KEY, -NA_L1NAME, -geometry, -Shape_Leng, -Shape_Area) %>% 
-  rename(ecoreg = NA_L1CODE)
-
-#7. Get distance to coast-----
-coast <- read_sf("gis/gshhg-shp-2.3.7/GSHHS_shp/l/GSHHS_l_L1.shp") %>% 
-  st_make_valid() %>% 
-  st_cast("LINESTRING")
-
-mn.near <- st_nearest_feature(mn.sf, coast)
-mn.coast <- data.frame(distance = as.numeric(st_distance(mn.sf, coast[mn.near,], by_element = TRUE))) %>% 
-  cbind(mn)
-
-#check
-ggplot(mn.coast) +
-  geom_point(aes(x=lon, y=lat, colour=distance))
-
-#8. Transform to utm----
+#5. Transform to utm----
 mn.utm <- st_as_sf(mn, coords=c("lon", "lat"), crs=4326) %>% 
   st_transform(crs=3857) %>% 
   st_coordinates() %>% 
-  cbind(mn) %>% 
-  left_join(mn.dem) %>% 
-  left_join(mn.coast) %>% 
-  rename(elevation = be75)
+  cbind(mn)
 
 write.csv(mn.utm, "Data/LBCUMCLocations.csv", row.names = FALSE)
 
-#9. Visualize----
+#6. Visualize----
 ggplot(mn.utm %>% dplyr::filter(season!="fallmig")) +
   geom_path(aes(x=X, y=Y, group=id)) +
-  geom_point(aes(x=X, y=Y, colour=season, size=distance))
+  geom_point(aes(x=X, y=Y, colour=season))
 
 ids <- unique(mn.utm$id)
 
@@ -114,11 +69,11 @@ for(i in 1:length(ids)){
     arrange(year, season, cluster)
   
   ggplot(mn.i) +
-#    geom_path(aes(x=X, y=Y)) +
+    geom_path(aes(x=X, y=Y)) +
     geom_point(aes(x=X, y=Y, colour = season), size=3, alpha = 0.7) +
     scale_colour_viridis_d() +
     facet_wrap(~year)
   
-#   ggsave(filename=paste0("Figs/MC/", ids[i], ".jpeg"))
+   ggsave(filename=paste0("Figs/MC/", ids[i], ".jpeg"))
   
 }
