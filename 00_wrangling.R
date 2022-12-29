@@ -48,11 +48,29 @@ stop.mn <- dat %>%
 mn <- rbind(breed.mn, winter.mn, stop.mn)
 table(mn$season, mn$cluster)
 
-#5. Transform to utm----
-mn.utm <- st_as_sf(mn, coords=c("lon", "lat"), crs=4326) %>% 
+#5. Get distance to coast-----
+coast <- read_sf("gis/gshhg-shp-2.3.7/GSHHS_shp/l/GSHHS_l_L1.shp") %>% 
+  st_make_valid() %>% 
+  st_cast("LINESTRING")
+
+mn.sf <- mn %>% 
+  st_as_sf(coords=c("lon", "lat"), crs=4326) 
+
+mn.near <- mn.sf %>% 
+  st_nearest_feature(coast)
+
+mn.coast <- data.frame(distance = as.numeric(st_distance(mn.sf, coast[mn.near,], by_element = TRUE))) %>% 
+  cbind(mn)
+
+#check
+ggplot(mn.coast) +
+  geom_point(aes(x=lon, y=lat, colour=distance))
+
+#6. Transform to utm----
+mn.utm <- st_as_sf(mn.coast, coords=c("lon", "lat"), crs=4326) %>% 
   st_transform(crs=3857) %>% 
   st_coordinates() %>% 
-  cbind(mn)
+  cbind(mn.coast)
 
 write.csv(mn.utm, "Data/LBCUMCLocations.csv", row.names = FALSE)
 
