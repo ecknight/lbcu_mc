@@ -77,7 +77,7 @@ write.csv(mn.utm, "Data/LBCUMCLocations.csv", row.names = FALSE)
 #6. Visualize----
 ggplot(mn.utm %>% dplyr::filter(season!="fallmig")) +
   geom_path(aes(x=X, y=Y, group=id)) +
-  geom_point(aes(x=X, y=Y, colour=season))
+  geom_point(aes(x=X, y=Y, colour=season, size=distance))
 
 ids <- unique(mn.utm$id)
 
