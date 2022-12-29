@@ -8,7 +8,8 @@ library(gridExtra)
 source("functions.R")
 
 #1. Load clusters for BBS routes with LBCU on them----
-clust.j <- read.csv("Data/LBCUBBSClusters.csv") 
+#clust.j <- read.csv("Data/LBCUBBSClusters.csv") 
+clust.j <- read.csv("Data/LBCUBBSClustersAll.csv")
 
 #2. Import bbs monitoring data----
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
@@ -19,7 +20,7 @@ bbs.j <- list()
 bbs.j[["route_strat"]] <- bbs_data[["route"]] %>% 
   mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
   inner_join(clust.j) %>% 
-  mutate(strat_name=svmcluster,
+  mutate(strat_name=knncluster,
          rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-"))
 
@@ -57,7 +58,7 @@ mod.j <- read_rds("bbsBayesModels/LBCU_cluster_gamye.rds")
 #7. Create annual indices----
 all_area_weights <- utils::read.csv("Data/area_weight.csv") %>% 
   mutate(area_sq_km = area/1000) %>% 
-  rename(region = svmcluster) %>% 
+  rename(region = knncluster) %>% 
   dplyr::select(region, area_sq_km)
 
 write.csv(all_area_weights, "/Library/Frameworks/R.framework/Versions/4.1/Resources/library/bbsBayes/composite-regions/cluster.csv", row.names = FALSE)
@@ -71,7 +72,6 @@ write.csv(indices$data_summary, "Data/LBCU_indices_gamye.csv")
 #8. Calculate trends----
 trends <- generate_trends(indices = indices,
                             slope=TRUE,
-#                            Min_year = 1970,
                             Min_year = 2007,
                             Max_year = 2019)
 
@@ -88,10 +88,10 @@ trend.list <- data.frame(route = dat.j$route,
   ungroup() %>% 
   left_join(bbs.j$route_strat %>% 
               rename(route = rt.uni) %>% 
-              dplyr::select(Country, State, route, id, svmcluster,  X, Y) %>% 
+              dplyr::select(Country, State, route, id, knncluster,  X, Y) %>% 
               unique()) %>% 
   left_join(trends %>% 
-              mutate(svmcluster = as.numeric(Region)))
+              mutate(knncluster = Region))
 
 write.csv(trend.list, "Data/LBCU_trend_gamye.csv")
 
@@ -102,14 +102,14 @@ plot.map <- ggplot(trend.list) +
 plot.map
 
 trend <- trend.list %>% 
-  dplyr::select(svmcluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
+  dplyr::select(knncluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
   unique() %>% 
   rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025')
 
 plot.bar <- ggplot(trend) +
   geom_hline(aes(yintercept=0), linetype="dashed", colour="grey30") +
-  geom_point(aes(x=svmcluster, y=Trend, colour=Trend), size=2) +
-  geom_errorbar(aes(x=svmcluster, ymin=down, ymax=up, colour=Trend)) +
+  geom_point(aes(x=knncluster, y=Trend, colour=Trend), size=2) +
+  geom_errorbar(aes(x=knncluster, ymin=down, ymax=up, colour=Trend)) +
   scale_colour_gradient2(high="blue", low="red")
 plot.bar
 
