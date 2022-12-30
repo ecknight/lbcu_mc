@@ -9,8 +9,7 @@ library(MigConnectivity)
 library(ebirdst)
 
 #1. Load clusters for BBS routes with LBCU on them----
-dat<- read.csv("Data/LBCUKDEClusters.csv") %>% 
-  dplyr::filter(!is.na(X))
+dat<- read.csv("Data/LBCUKDEClusters.csv")
 
 #2. Extract relative abundance information from eBird----
 #set_ebirdst_access_key("e7ld1bagh8n1")
@@ -26,7 +25,7 @@ dat.abun <- raster::extract(ebd, dat.sf, na.rm=TRUE) %>%
   cbind(dat)
 
 abun <- dat.abun %>% 
-  group_by(boot, nclust, kdecluster, season) %>% 
+  group_by(boot, nclust, group, season) %>% 
   summarize(breeding = mean(breeding, na.rm=TRUE),
             postbreeding_migration = mean(postbreeding_migration, na.rm=TRUE),
             nonbreeding = mean(nonbreeding, na.rm=TRUE),
@@ -71,32 +70,32 @@ for(i in 1:boot){
                     nclust==clusters[j])
     
     bw.j <- rbind(breed.j, winter.j) %>% 
-      dplyr::select(id, kdecluster, X, Y, season) %>% 
-      pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
+      dplyr::select(id, group, X, Y, season) %>% 
+      pivot_wider(id_cols=id:group, names_from=season, values_from=X:Y) %>% 
       dplyr::filter(!is.na(X_winter) & !is.na(X_breed)) %>% 
       rename(bird=id)
     
     bf.j <- rbind(breed.j, fall.j) %>% 
-      dplyr::select(id, kdecluster, X, Y, season) %>% 
-      pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
+      dplyr::select(id, group, X, Y, season) %>% 
+      pivot_wider(id_cols=id:group, names_from=season, values_from=X:Y) %>% 
       dplyr::filter(!is.na(X_fallmig) & !is.na(X_breed)) %>% 
       rename(bird=id)
     
     wf.j <- rbind(winter.j, fall.j) %>% 
-      dplyr::select(id, kdecluster, X, Y, season) %>% 
-      pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
+      dplyr::select(id, group, X, Y, season) %>% 
+      pivot_wider(id_cols=id:group, names_from=season, values_from=X:Y) %>% 
       dplyr::filter(!is.na(X_fallmig) & !is.na(X_winter)) %>% 
       rename(bird=id)
     
     bs.j <- rbind(breed.j, spring.j) %>% 
-      dplyr::select(id, kdecluster, X, Y, season) %>% 
-      pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
+      dplyr::select(id, group, X, Y, season) %>% 
+      pivot_wider(id_cols=id:group, names_from=season, values_from=X:Y) %>% 
       dplyr::filter(!is.na(X_springmig) & !is.na(X_breed)) %>% 
       rename(bird=id)
     
     ws.j <- rbind(winter.j, spring.j) %>% 
-      dplyr::select(id, kdecluster, X, Y, season) %>% 
-      pivot_wider(id_cols=id:kdecluster, names_from=season, values_from=X:Y) %>% 
+      dplyr::select(id, group, X, Y, season) %>% 
+      pivot_wider(id_cols=id:group, names_from=season, values_from=X:Y) %>% 
       dplyr::filter(!is.na(X_springmig) & !is.na(X_winter)) %>% 
       rename(bird=id)
     
@@ -116,7 +115,7 @@ for(i in 1:boot){
                                     proj4string=CRS(proj4string(ptsbw)))
     
     idbw.j <- bw.j %>% 
-      rename(breed_id=kdecluster) %>% 
+      rename(breed_id=group) %>% 
       cbind(id=over(ptsbw, spgrdbw)) %>% 
       dplyr::rename(winter_id=id)
     
@@ -134,7 +133,7 @@ for(i in 1:boot){
                                     proj4string=CRS(proj4string(ptswb)))
     
     idwb.j <- bw.j %>% 
-      rename(winter_id=kdecluster) %>% 
+      rename(winter_id=group) %>% 
       cbind(id=over(ptswb, spgrdwb)) %>% 
       dplyr::rename(breed_id=id)
     
@@ -152,7 +151,7 @@ for(i in 1:boot){
                                     proj4string=CRS(proj4string(ptsbf)))
     
     idbf.j <- bf.j %>% 
-      rename(breed_id=kdecluster) %>% 
+      rename(breed_id=group) %>% 
       cbind(id=over(ptsbf, spgrdbf)) %>% 
       dplyr::rename(fallmig_id=id)
     
@@ -170,7 +169,7 @@ for(i in 1:boot){
                                     proj4string=CRS(proj4string(ptswf)))
     
     idwf.j <- wf.j %>% 
-      rename(winter_id=kdecluster) %>% 
+      rename(winter_id=group) %>% 
       cbind(id=over(ptswf, spgrdwf)) %>% 
       dplyr::rename(fallmig_id=id)
     
@@ -188,7 +187,7 @@ for(i in 1:boot){
                                     proj4string=CRS(proj4string(ptsbs)))
     
     idbs.j <- bs.j %>% 
-      rename(breed_id=kdecluster) %>% 
+      rename(breed_id=group) %>% 
       cbind(id=over(ptsbs, spgrdbs)) %>% 
       dplyr::rename(springmig_id=id)
     
@@ -206,7 +205,7 @@ for(i in 1:boot){
                                     proj4string=CRS(proj4string(ptsws)))
     
     idws.j <- ws.j %>% 
-      rename(winter_id=kdecluster) %>% 
+      rename(winter_id=group) %>% 
       cbind(id=over(ptsws, spgrdws)) %>% 
       dplyr::rename(springmig_id=id)
     
@@ -808,18 +807,19 @@ sum %>%
   summarize(n=n())
 
 ggplot(mc) +
-  geom_point(aes(x=nclust, y=MC)) +
-  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
+  geom_jitter(aes(x=nclust, y=MC)) +
+#  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
   facet_grid(originseason~targetseason)
 
 ggplot(sum) +
- geom_boxplot(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
+ geom_jitter(aes(x=nclust, y=mc.s, group=nclust), colour="blue") +
   facet_wrap(originseason~targetseason)
 
 ggsave(filename="figs/MC.jpeg", width=12, height=5)
 
 #15. Summarize across seasons----
-sum.sum <- sum %>% 
+sum.sum <- sum %>%
+#  dplyr::filter(originseason=="breed") %>% 
   group_by(nclust, boot) %>% 
   summarize(mc.s= mean(mc.s, na.rm=TRUE)) %>% 
   group_by(boot) %>% 
@@ -834,5 +834,3 @@ sum.sum %>%
   dplyr::filter(votemc==1) %>% 
   group_by(nclust) %>% 
   summarize(n=n())
-
-#6 clusters is optimal
