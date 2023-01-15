@@ -76,6 +76,9 @@ ggplot() +
   geom_point(data=dplyr::filter(track.raw, season=="breed"), aes(x=lon, y=lat), size=3, colour="grey") + 
   scale_colour_viridis_c()
 
+#save for trend estimation
+write.csv(bbs.use, "Data/BBSRoutesToUse.csv", row.names=FALSE)
+
 #4. Set # of clusters---
 clusts <- c("3", "manual")
 
