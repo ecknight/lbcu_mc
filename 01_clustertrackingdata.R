@@ -1,6 +1,8 @@
 library(tidyverse)
 library(ClustImpute)
 library(data.table)
+library(missMDA)
+library(FactoMineR)
 
 options(scipen=9999)
 
@@ -19,8 +21,10 @@ dat.n <- dat  %>%
   dplyr::filter(n==2) %>% 
   ungroup()
 
-#3. Set # of bootstraps & set up loop----
+#3. Set # of bootstraps, clusters, & set up loop----
 boot <- 100
+
+clusters <- c(2:6)
 
 dat.kde <- list()
 set.seed(1234)
@@ -40,20 +44,9 @@ for(i in 1:boot){
     data.frame()
   
   dat.k <- dat.j %>% 
-    dplyr::select(-id)
+    dplyr::select(-id) 
   
-  #5. KDE with incomplete data clustering----
-  clusters <- c(2:6)
-  
-  kde.cluster <- list()
-  for(j in 1:length(clusters)){
-    kde.j <- ClustImpute(dat.k, clusters[j], nr_iter=100)
-    kde.cluster[[j]] <- data.frame(group = kde.j$clusters,
-                                   nclust = clusters[j],
-                                   id = dat.j$id)
-  }
-  
-  #6. Add manual clusters----
+  #5. Add manual clusters----
   dat.man <- dat.i  %>% 
     dplyr::filter(season=="winter") %>% 
     mutate(group = case_when(X > -10960000 & distance < 100000 ~ 4,
@@ -67,7 +60,26 @@ for(i in 1:boot){
     data.frame() %>% 
     mutate(nclust="manual")
   
-  #7. Put together----
+  #6. Calculate centroids from manual clusters----
+  cent <- dat.man %>% 
+#    dplyr::filter(season %in% c("winter", "breed")) %>% 
+    group_by(group, season) %>% 
+    summarize(X=mean(X),
+              Y=mean(Y)) %>% 
+    ungroup()  %>% 
+    pivot_wider(id_cols=group, names_from=season, values_from=X:Y) %>%
+    data.frame()
+  
+  #7. KDE with incomplete data clustering----
+  kde.cluster <- list()
+  for(j in 1:length(clusters)){
+    kde.j <- ClustImpute(dat.k, clusters[j], nr_iter=100)
+    kde.cluster[[j]] <- data.frame(group = kde.j$clusters,
+                                   nclust = clusters[j],
+                                   id = dat.j$id)
+  }
+  
+  #8. Put together----
   dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
     pivot_wider(id_cols=id, names_from=nclust, values_from=group, names_prefix="kde_") %>% 
     left_join(dat.i) %>% 
@@ -79,31 +91,31 @@ print(paste0("Finished bootstrap ", i, " of ", boot))
   
 }
 
-#8. Wrangle output----
+#9. Wrangle output----
 dat.out <- rbindlist(dat.kde)
 
-#9. Look at variation----
-dat.sum <- dat.out %>% 
-  group_by(id, season, nclust, group) %>% 
-  summarize(n=n()) %>% 
+#10. Look at variation----
+dat.sum <- dat.out %>%
+  group_by(id, season, nclust, group) %>%
+  summarize(n=n()) %>%
   ungroup()
 
 ggplot(dat.sum) +
   geom_histogram(aes(x=n)) +
   facet_grid(season~nclust)
 
-#10. Remove nclust with < 5 individuals in a cluster----
-# dat.n <- dat.out %>% 
-#   dplyr::filter(season=="winter") %>% 
-#   group_by(nclust, group) %>% 
-#   summarize(n=n()) %>% 
-#   dplyr::filter(n/100 < 5)
-# 
-# dat.final <- dat.out %>% 
-#   dplyr::filter(!nclust %in% dat.n$nclust)
+#11. Remove nclust with < 5 individuals in a cluster----
+dat.n <- dat.out %>%
+  dplyr::filter(season=="winter") %>%
+  group_by(nclust, group) %>%
+  summarize(n=n()) %>%
+  dplyr::filter(n/100 < 5)
 
-#11. Plot----
-ggplot(dat.out) +
+dat.final <- dat.out %>%
+  dplyr::filter(!nclust %in% dat.n$nclust)
+
+#12. Plot----
+ggplot(dat.final) +
   geom_point(aes(x=X, y=Y, colour=factor(group))) +
   facet_grid(season ~ nclust, scales="free_y") + 
   scale_colour_viridis_d()
