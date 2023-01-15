@@ -11,14 +11,14 @@ library(MuMIn)
 #PART A: REGIONS####
 
 #1. Set number of clusters----
-n <- 3
+n <- c("3", "manual")
 
 #2. Get dominant cluster id for each bird----
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>% 
-  dplyr::filter(nclust==n,
+  dplyr::filter(nclust %in% n,
                 !is.na(X)) %>% 
-  group_by(id) %>% 
-  summarize(kdecluster = round(mean(kdecluster))) %>% 
+  group_by(id, nclust) %>% 
+  summarize(group = round(mean(group))) %>% 
   ungroup()
 
 #3. Import & wrangle daily locations----
@@ -31,7 +31,7 @@ dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
          seasoncluster = ifelse(is.na(seasoncluster), 0, as.numeric(seasoncluster)),
          kdeid = paste(season, id, year, seasoncluster, sep="-")) %>% 
   left_join(clust) %>% 
-  group_by(kdeid) %>% 
+  group_by(nclust, kdeid) %>% 
   mutate(n=n()) %>% 
   ungroup() %>% 
   dplyr::filter(n >= 5)
@@ -39,7 +39,7 @@ dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
 #4. Make sp object----
 dat.sp <- dat %>% 
   st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
-  mutate(ID = paste(kdecluster, kdeid, sep="-")) %>% 
+  mutate(ID = paste(nclust, group, kdeid, sep="-")) %>% 
   dplyr::select(ID, geometry)
 
 #5. Set up loop----
@@ -80,7 +80,7 @@ for(i in c(1:length(inds))){
 kd.out <- kd.sp %>% 
   mutate(area = round(area)/100, 
          rad = round(sqrt(area/pi))) %>% 
-  separate(id, into=c("kdecluster", "season", "bird", "year", "cluster"), remove=FALSE)
+  separate(id, into=c("nclust", "group", "season", "bird", "year", "cluster"), remove=FALSE)
 
 write_sf(kd.out, "gis/shp/kde_individual.shp")
 kd.out <- read_sf("gis/shp/kde_individual.shp")
@@ -89,7 +89,7 @@ kd.out <- read_sf("gis/shp/kde_individual.shp")
 kd.sum <- kd.out %>% 
   dplyr::select(-geometry) %>% 
   data.frame() %>% 
-#  group_by(kdecluster, season) %>% 
+#  group_by(group, season) %>% 
 #  group_by(season) %>% 
   summarize(area.mn = mean(area), 
             area.sd = sd(area)) %>% 
@@ -98,9 +98,10 @@ kd.sum <- kd.out %>%
 kd.sum
 
 #11. Peak at effects of cluster & season on homerange area----
-l1 <- lme4::lmer(area ~ kdecluster*season + (1|bird), kd.out, na.action = "na.fail")
+l1 <- lme4::lmer(area ~ group*season + (1|bird), kd.out, na.action = "na.fail")
 MuMIn::dredge(l1)
 summary(l1)
 
 ggplot(filter(kd.out, area < 10000)) +
-  geom_boxplot(aes(x=season, y=log(area), fill=factor(kdecluster)))
+  geom_boxplot(aes(x=season, y=log(area), fill=factor(group))) +
+  facet_wrap(~nclust)
