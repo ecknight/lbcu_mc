@@ -39,7 +39,8 @@ boot <- max(dat$boot)
 mantel.out <- list()
 mc.out <- list()
 set.seed(1)
-for(i in 1:boot){
+#for(i in 1:boot){
+for(i in 1:1){
   
   dat.i <- dat %>%
     dplyr::filter(boot==i)
@@ -925,7 +926,7 @@ for(i in 1:boot){
 }
 
 #13. Collapse & save results----
-mantel <- rbindlist(mantel)
+mantel <- rbindlist(mantel.out)
 mc <- rbindlist(mc.out)
 
 write.csv(mantel, "Data/LBCUMantel.csv", row.names = FALSE)
@@ -1008,12 +1009,12 @@ ggplot(sum) +
 
 #16. Calculate winner----
 sum.all <- mc %>% 
-  group_by(nclust) %>% 
+  group_by(nclust, grid) %>% 
   summarize(MC = mean(MC),
             MClow = mean(MClow),
             MChigh = mean(MChigh)) %>% 
   ungroup() %>% 
-  arrange(-MC) %>% 
+  arrange(grid, -MC) %>% 
   mutate(order = row_number())
 sum.all
 
