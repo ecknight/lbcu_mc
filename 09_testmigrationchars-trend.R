@@ -1,6 +1,6 @@
 library(tidyverse)
 library(lubridate)
-library(lme4)
+library(brms)
 library(performance)
 library(usdm)
 
@@ -82,10 +82,10 @@ loops <- dat %>%
 
 priors <- c(prior(normal(0,10), class = "Intercept"),
             prior(normal(0,10), class = "b", coef ="years"),
-            prior(normal(0,10), class = "b", coef ="var"))
+            prior(normal(0,10), class = "b", coef ="val"))
 
 mod.df <- data.frame()
-for(i in 1:nrow(loops)){
+for(i in 2:nrow(loops)){
   
   dat.i <- dat %>% 
     dplyr::filter(nclust==loops$nclust[i],
@@ -94,45 +94,23 @@ for(i in 1:nrow(loops)){
                   var==loops$var[i]) %>% 
     dplyr::filter(!is.na(val))
   
-  #Get an estimate of theta
-  fit <- glmer.nb(count ~ years  + (1|id.route) + (1|id.bird), data=dat.i)
-  theta <- lme4:::getNBdisp(fit)
+  mod.i <- brm(count ~ years + val + (1|id.route) + (1|id.bird),
+                  family=negbinomial(),
+                  data = dat.i, 
+                  warmup = 1000, 
+                  iter   = 5000, 
+                  chains = 3, 
+                  inits  = "random",
+                  cores  = 6,
+                  prior=priors)
   
-  fit1 <- try(glmer.nb(count ~ years + fallmig_arrive + (1|id.route) + (1|id.bird), data=dat.i))
-  fit2 <- try(glmer.nb(count ~ years + fallmig_depart + (1|id.route) + (1|id.bird), data=dat.i))
-  fit4 <- try(glmer.nb(count ~ years + fallmig_duration + (1|id.route) + (1|id.bird), data=dat.i))
-  fit5 <- try(glmer.nb(count ~ years + fallmig_rate + (1|id.route) + (1|id.bird), data=dat.i))
-  fit6 <- try(glmer.nb(count ~ years + fallmig_HRarea + (1|id.route) + (1|id.bird), data=dat.i))
-  fit7 <- try(glmer.nb(count ~ years + fallmig_Stopovers + (1|id.route) + (1|id.bird), data=dat.i))
-  fit8 <- try(glmer.nb(count ~ years + springmig_arrive + (1|id.route) + (1|id.bird), data=dat.i))
-  fit9 <- try(glmer.nb(count ~ years + springmig_depart + (1|id.route) + (1|id.bird), data=dat.i))
-  fit11 <- try(glmer.nb(count ~ years + springmig_duration + (1|id.route) + (1|id.bird), data=dat.i))
-  fit12 <- try(glmer.nb(count ~ years + springmig_rate + (1|id.route) + (1|id.bird), data=dat.i))
-  fit13 <- try(glmer.nb(count ~ years + springmig_HRarea + (1|id.route) + (1|id.bird), data=dat.i))
-  fit14 <- try(glmer.nb(count ~ years + springmig_Stopovers + (1|id.route) + (1|id.bird), data=dat.i))
-  fit15 <- try(glmer.nb(count ~ years + springmigt_arrive + (1|id.route) + (1|id.bird), data=dat.i))
-  fit16 <- try(glmer.nb(count ~ years + springmigt_depart + (1|id.route) + (1|id.bird), data=dat.i))
-  fit18 <- try(glmer.nb(count ~ years + springmigt_duration + (1|id.route) + (1|id.bird), data=dat.i))
-  fit19 <- try(glmer.nb(count ~ years + springmigt_rate + (1|id.route) + (1|id.bird), data=dat.i))
-  fit20 <- try(glmer.nb(count ~ years + springmigt_HRarea + (1|id.route) + (1|id.bird), data=dat.i))
-  fit21 <- try(glmer.nb(count ~ years + springmigt_Stopovers + (1|id.route) + (1|id.bird), data=dat.i))
-  fit22 <- try(glmer.nb(count ~ years + breed_HRarea + (1|id.route) + (1|id.bird), data=dat.i))
-  fit23 <- try(glmer.nb(count ~ years + winter_HRarea + (1|id.route) + (1|id.bird), data=dat.i))
-  fit24 <- try(glmer.nb(count ~ years + winter_WinterHRs + (1|id.route) + (1|id.bird), data=dat.i))
-  
-  mods <- list(fit1, fit2, fit4, fit5, fit7, fit8, fit9, fit11, fit12, fit13, fit14, fit15, fit16, fit18, fit19, fit21, fit22, fit24)
-  
-  for(j in 1:length(mods)){
-    
-    if(class(mods[[j]])=="glmerMod"){
-      mod.df <- data.frame(summary(mods[[j]])$coefficients) %>% 
-        mutate(nclust=loops$nclust[i],
-               region=loops$region[i],
-               cov = row.names(summary(mods[[j]])$coefficients)) %>% 
-        dplyr::filter(!cov %in% c("(Intercept)", "years")) %>% 
-        rbind(mod.df)
-    }
-  }
+  mod.df <- summary(mod.i, prob = 0.80)$fixed %>% 
+    mutate(nclust=loops$nclust[i],
+           region=loops$region[i],
+           season=loops$season[i],
+           var=loops$var[i]) %>% 
+    rbind(mod.df)
+
   print(paste0("Finished loop ", i, " of ", nrow(loops)))
 }
 
