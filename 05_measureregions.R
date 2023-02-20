@@ -60,7 +60,7 @@ for(i in c(1:length(inds))){
   kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
   raster::writeRaster(kd.r.1, paste0("gis/raster/kde_", inds[i], ".tif"), overwrite=TRUE)
   
-  #8. Get shp of 95% isopleth----
+  #8. Get shp of 50% isopleth----
   kd.sp.i <- try(getverticeshr(kd, percent=50) %>% 
     st_as_sf() %>% 
     st_transform(crs=4326))
