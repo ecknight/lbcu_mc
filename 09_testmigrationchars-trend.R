@@ -6,12 +6,6 @@ library(usdm)
 
 options(scipen=99999)
 
-#Variables
-#Spring vars - t, t+1
-#Breed vars - t+1
-#Fall vars - t+1
-#Winter vars - t+1
-
 #1. Get bbs cluster assignment data----
 clust <- read.csv("Data/LBCUBBSClusters.csv") %>% 
   dplyr::filter(nclust %in% c("3", "manual")) %>% 
@@ -41,6 +35,11 @@ bbs <- bbs_data$route %>%
   dplyr::select(id.route, year, count, nclust, region)
 
 #3. Link attribute data to bbs data----
+#Spring vars - t, t+1
+#Breed vars - t+1
+#Fall vars - t+1
+#Winter vars - t+1
+
 raw <- read.csv("Data/MovementBehaviours.csv") %>% 
   dplyr::filter(!var %in% c("arrive2", "depart2")) %>% 
   group_by(nclust, region, id, year, season, var) %>% 
@@ -85,7 +84,7 @@ priors <- c(prior(normal(0,10), class = "Intercept"),
             prior(normal(0,10), class = "b", coef ="val"))
 
 mod.df <- data.frame()
-for(i in 2:nrow(loops)){
+for(i in 1:nrow(loops)){
   
   dat.i <- dat %>% 
     dplyr::filter(nclust==loops$nclust[i],
@@ -104,7 +103,7 @@ for(i in 2:nrow(loops)){
                   cores  = 6,
                   prior=priors)
   
-  mod.df <- summary(mod.i, prob = 0.80)$fixed %>% 
+  mod.df <- summary(mod.i, prob = 0.95)$fixed %>% 
     mutate(nclust=loops$nclust[i],
            region=loops$region[i],
            season=loops$season[i],
@@ -114,6 +113,25 @@ for(i in 2:nrow(loops)){
   print(paste0("Finished loop ", i, " of ", nrow(loops)))
 }
 
+write.csv(mod.df, "Results/MigrationChars_SingleMods.csv", row.names = FALSE)
+mod.df <- read.csv("Results/MigrationChars_SingleMods.csv")
+
 #6. Select covariates----
+ggplot(mod.df) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_point(aes(x=var, y=Estimate, colour=region)) +
+  facet_grid(season ~ nclust)
+
+
+mod.use <- mod.df %>% 
+  mutate(sig = case_when('l.80..CI' > 0 & 'u.80..CI' > 0 ~ 1,
+                         'l.80..CI' < 0 & 'u.80..CI' < 0 ~ 1,
+                         'l.80..CI' > 0 & 'u.80..CI' < 0 ~ 0,
+                         'l.80..CI' < 0 & 'u.80..CI' > 0 ~ 1))
 
 #7. Full models----
+
+priors <- c(prior(normal(0,10), class = "Intercept"),
+            prior(normal(0,10), class = "b", coef ="years"),
+            prior(normal(0,10), class = "b", coef ="val"))
+
