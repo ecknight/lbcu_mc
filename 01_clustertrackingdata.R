@@ -27,15 +27,17 @@ boot <- 100
 clusters <- c(2:5)
 
 dat.kde <- list()
-set.seed(1234)
 for(i in 1:boot){
   
   #4. Pick one point for each season for each individual & make it wide----
+  set.seed(i)
   dat.i <- dat %>% 
     dplyr::filter(id %in% dat.n$id) %>% 
     group_by(id, season) %>% 
-    sample_n(1) %>% 
-    ungroup()
+    mutate(rowid = row_number(),
+           use = sample(1:max(rowid), 1)) %>% 
+    ungroup() %>% 
+    dplyr::filter(rowid==use)
   
   #Select columns for clustering
   dat.j <- dat.i %>% 
@@ -60,17 +62,7 @@ for(i in 1:boot){
     data.frame() %>% 
     mutate(nclust="manual")
   
-  #6. Calculate centroids from manual clusters----
-  cent <- dat.man %>% 
-#    dplyr::filter(season %in% c("winter", "breed")) %>% 
-    group_by(group, season) %>% 
-    summarize(X=mean(X),
-              Y=mean(Y)) %>% 
-    ungroup()  %>% 
-    pivot_wider(id_cols=group, names_from=season, values_from=X:Y) %>%
-    data.frame()
-  
-  #7. KDE with incomplete data clustering----
+  #6. KDE with incomplete data clustering----
   kde.cluster <- list()
   for(j in 1:length(clusters)){
     kde.j <- ClustImpute(dat.k, clusters[j], nr_iter=100)
@@ -79,7 +71,7 @@ for(i in 1:boot){
                                    id = dat.j$id)
   }
   
-  #8. Put together----
+  #7. Put together----
   dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
     pivot_wider(id_cols=id, names_from=nclust, values_from=group, names_prefix="kde_") %>% 
     left_join(dat.i) %>% 
@@ -93,6 +85,9 @@ print(paste0("Finished bootstrap ", i, " of ", boot))
 
 #9. Wrangle output----
 dat.out <- rbindlist(dat.kde)
+
+#check random sampling
+dat.out %>% group_by(id, season, lon, lat) %>% summarize(n=n()) %>% ungroup() %>% View()
 
 #10. Look at variation----
 dat.sum <- dat.out %>%
