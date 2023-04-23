@@ -162,7 +162,7 @@ clust <- clust.raw %>%
   group_by(id, season, nclust) %>% 
   summarize(X = mean(X, na.rm=FALSE), 
             Y = mean(Y, na.rm=FALSE),
-            kdecluster = round(mean(kdecluster))) %>% 
+            group = round(mean(group))) %>% 
   ungroup()
 
 clust.ll <- clust  %>% 
@@ -179,12 +179,12 @@ write.csv(dplyr::filter(clust.ll, nclust=="3 regions"), "Data/LBCUclusterlocs.cs
 
 clust.ll$season <- factor(clust.ll$season, levels=c("breed", "fallmig", "winter", "springmig"),
                              labels=c("Breeding", "Postbreeding\nmigration\nstopover", "Nonbreeding", "Prebreeding\nmigration\nstopover"))
-clust.ll$nclust <- factor(clust.ll$nclust, levels=c(2,3,4,5,6), labels=c("2 groups", "3 groups", "4 groups", "5 groups", "6 groups"))
+clust.ll$nclust <- factor(clust.ll$nclust, levels=c("2", "3", "4", "5", "manual"), labels=c("2 groups", "3 groups", "4 groups", "5 groups", "manual groups"))
   
 #3b. Clustering plot----
 plot.clust <- ggplot(clust.ll) +
   geom_polygon(data = nam, aes(x=long, y = lat, group = group), fill = "gray75", color="gray90", size=0.3) +
-  geom_point(aes(x=lon, y=lat, fill=factor(kdecluster)), size = 3, pch=21, colour="grey90") +
+  geom_point(aes(x=lon, y=lat, fill=factor(group)), size = 3, pch=21, colour="grey90") +
   coord_sf(xlim=c(min(clust.ll$lon)-5, max(clust.ll$lon)+5), ylim = c(min(clust.ll$lat)-5, max(clust.ll$lat)+5), expand = FALSE, crs=4326) +
   facet_grid(season ~ nclust) +
   xlab("") +
