@@ -929,11 +929,36 @@ for(i in 1:1){
 mantel <- rbindlist(mantel.out)
 mc <- rbindlist(mc.out)
 
-write.csv(mantel, "Data/LBCUMantel.csv", row.names = FALSE)
-write.csv(mc, "Data/LBCUMigConnectivity.csv", row.names = FALSE)
+#write.csv(mantel, "Data/LBCUMantel.csv", row.names = FALSE)
+#write.csv(mc, "Data/LBCUMigConnectivity.csv", row.names = FALSE)
 
 mantel <- read.csv("Data/LBCUMantel.csv")
 mc <- read.csv("Data/LBCUMigConnectivity.csv")
+
+#14. Calculate MC per season----
+mc.season.sum <- mc %>% 
+  group_by(nclust, targetseason, originseason) %>% 
+  summarize(MC = mean(MC),
+            MClow = mean(MClow),
+            MChigh = mean(MChigh)) %>% 
+  ungroup() %>% 
+  data.frame()
+
+ggplot(mc.season.sum) +
+  geom_point(aes(x=nclust, y=MC)) +
+#  geom_errorbar(aes(x=nclust, ymin = MClow, ymax = MChigh)) %>% 
+  facet_grid(originseason ~ targetseason)
+
+#14. Calculate MC winner----
+mc.sum <- mc %>% 
+  group_by(nclust) %>% 
+  summarize(MC = mean(MC),
+            MClow = quantile(MC, 0.025),
+            MChigh = quantile(MC, 0.975))
+
+ggplot(mc.sum) +
+  geom_point(aes(x=nclust, y=MC)) +
+  geom_errorbar(aes(x=nclust, ymin = MClow, ymax = MChigh))
 
 #14. Put together----
 all <- mantel %>% 
@@ -1007,21 +1032,6 @@ ggplot(sum.mc) +
   geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
   facet_grid(originseason~targetseason)
 
-sum.mc <- mantel %>% 
-  group_by(originseason, targetseason, nclust) %>% 
-  summarize(MC = mean(MC),
-            MClow = mean(MClow),
-            MChigh = mean(MChigh)) %>% 
-  ungroup() %>% 
-  arrange(-MC) %>% 
-  mutate(order = row_number())
-sum.mc
-
-ggplot(sum.mc) +
-  geom_point(aes(x=nclust, y=MC)) +
-  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
-  facet_grid(originseason~targetseason)
-
 #16. Calculate winner----
 sum.mc.all <- mc %>% 
   group_by(nclust) %>% 
@@ -1041,7 +1051,7 @@ sum.mantel.all <- mantel %>%
   mutate(order = row_number())
 sum.mantel.all
 
-ggplot(sum.all) +
+ggplot(sum.mc.all) +
   geom_point(aes(x=nclust, y=MC)) +
   geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
   geom_hline(aes(yintercept=max(MC)), linetype="dashed")
