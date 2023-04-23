@@ -1,12 +1,7 @@
 library(tidyverse)
+library(brms)
 
 options(scipen=99999)
-
-#Variables
-#Spring vars - t, t+1
-#Breed vars - t+1
-#Fall vars - t+1
-#Winter vars - t+1
 
 #1. Get bbs cluster assignment data----
 clust <- read.csv("Data/LBCUBBSClusters.csv") %>% 
@@ -37,6 +32,7 @@ bbs <- bbs_data$route %>%
   dplyr::select(id.route, year, count, nclust, region)
 
 #3. Link attribute data to bbs data----
+
 raw <- read.csv("Data/LBCU_environvars.csv") %>% 
   mutate(conv = covcrop + covbuilt,
          region = case_when(kdecluster==1 ~ "central", 
