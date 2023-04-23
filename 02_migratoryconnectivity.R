@@ -35,12 +35,11 @@ abun <- dat.abun %>%
 
 #3. Set up bootstrap loop----
 boot <- max(dat$boot)
+boot <- 10
 
-mantel.out <- list()
 mc.out <- list()
 set.seed(1)
-#for(i in 1:boot){
-for(i in 1:1){
+for(i in 6:boot){
   
   dat.i <- dat %>%
     dplyr::filter(boot==i)
@@ -52,7 +51,6 @@ for(i in 1:1){
   clusters <- unique(dat$nclust)
   
   mc.df <- data.frame()
-  mantel.list <- list()
   for(j in 1:length(clusters)){
     
     #4. Wrangle data----
@@ -101,143 +99,6 @@ for(i in 1:1){
       pivot_wider(id_cols=id:group, names_from=season, values_from=X:Y) %>% 
       dplyr::filter(!is.na(X_springmig) & !is.na(X_winter)) %>% 
       rename(bird=id)
-    
-    #6. Calculate mantel within regions----
-    mantel.df <- data.frame()
-    nclust = length(unique(bw.j$group))
-    for(k in 1:nclust){
-      
-      #Breed-Winter
-      bw.k <- bw.j %>% 
-        dplyr::filter(group==k)
-      
-      bwb.k <- bw.k %>% 
-        dplyr::select(X_breed, Y_breed) %>% 
-        vegdist("euclidean")
-      
-      bww.k <- bw.k %>% 
-        dplyr::select(X_winter, Y_winter) %>% 
-        vegdist("euclidean")
-      
-      mantelbw.k <- try(mantel(bwb.k, bww.k))
-      
-      if(class(mantelbw.k)=="mantel"){
-        mantel.df <- data.frame(r = mantelbw.k[["statistic"]],
-                                p = mantelbw.k[["signif"]],
-                                n=nrow(bw.k),
-                                group = k,
-                                nclust=clusters[j],
-                                originseason="breed",
-                                targetseason="winter",
-                                boot=i) %>% 
-          rbind(mantel.df)
-      }
-      
-      #Breed-Fallmig
-      bf.k <- bf.j %>% 
-        dplyr::filter(group==k)
-      
-      bfb.k <- bf.k %>% 
-        dplyr::select(X_breed, Y_breed) %>% 
-        vegdist("euclidean")
-      
-      bff.k <- bf.k %>% 
-        dplyr::select(X_fallmig, Y_fallmig) %>% 
-        vegdist("euclidean")
-      
-      mantelbf.k <- try(mantel(bfb.k, bff.k))
-      
-      if(class(mantelbf.k)=="mantel"){
-        mantel.df <- data.frame(r = mantelbf.k[["statistic"]],
-                                p = mantelbf.k[["signif"]],
-                                n=nrow(bf.k),
-                                group = k,
-                                nclust=clusters[j],
-                                originseason="breed",
-                                targetseason="fallmig",
-                                boot=i) %>% 
-          rbind(mantel.df)
-      }
-      
-      #Breed-Springmig
-      bs.k <- bs.j %>% 
-        dplyr::filter(group==k)
-      
-      bsb.k <- bs.k %>% 
-        dplyr::select(X_breed, Y_breed) %>% 
-        vegdist("euclidean")
-      
-      bss.k <- bs.k %>% 
-        dplyr::select(X_springmig, Y_springmig) %>% 
-        vegdist("euclidean")
-      
-      mantelbs.k <- try(mantel(bsb.k, bss.k))
-      
-      if(class(mantelbs.k)=="mantel"){
-        mantel.df <- data.frame(r = mantelbs.k[["statistic"]],
-                                p = mantelbs.k[["signif"]],
-                                n=nrow(bs.k),
-                                group = k,
-                                nclust=clusters[j],
-                                originseason="breed",
-                                targetseason="springmig",
-                                boot=i) %>% 
-          rbind(mantel.df)
-      }
-      
-      #Winter-Fallmig
-      wf.k <- wf.j %>% 
-        dplyr::filter(group==k)
-      
-      wff.k <- wf.k %>% 
-        dplyr::select(X_fallmig, Y_fallmig) %>% 
-        vegdist("euclidean")
-      
-      wfw.k <- wf.k %>% 
-        dplyr::select(X_winter, Y_winter) %>% 
-        vegdist("euclidean")
-      
-      mantelwf.k <- try(mantel(wff.k, wfw.k))
-      
-      if(class(mantelwf.k)=="mantel"){
-        mantel.df <- data.frame(r = mantelwf.k[["statistic"]],
-                                p = mantelwf.k[["signif"]],
-                                n=nrow(wf.k),
-                                group = k,
-                                nclust=clusters[j],
-                                originseason="winter",
-                                targetseason="fallmig",
-                                boot=i) %>% 
-          rbind(mantel.df)
-      }
-      
-      #Winter-Springmig
-      ws.k <- ws.j %>% 
-        dplyr::filter(group==k)
-      
-      wss.k <- ws.k %>% 
-        dplyr::select(X_springmig, Y_springmig) %>% 
-        vegdist("euclidean")
-      
-      wsw.k <- ws.k %>% 
-        dplyr::select(X_winter, Y_winter) %>% 
-        vegdist("euclidean")
-      
-      mantelws.k <- try(mantel(wss.k, wsw.k))
-      
-      if(class(mantelws.k)=="mantel"){
-        mantel.df <- data.frame(r = mantelws.k[["statistic"]],
-                                p = mantelws.k[["signif"]],
-                                n=nrow(ws.k),
-                                group = k,
-                                nclust=clusters[j],
-                                originseason="winter",
-                                targetseason="springmig",
-                                boot=i) %>% 
-          rbind(mantel.df)
-        }
-      }
-      mantel.list[[j]] <- mantel.df
     
     #5. Set up target grids for MC estimation----
     
@@ -708,7 +569,7 @@ for(i in 1:1){
       mutate(abun = nonbreeding/(sum(nonbreeding)))
     abunw.j <- bbsw.j$abun
     
-    #12. Define tag type----
+    #11. Define tag type----
     telbw.j <- rep(TRUE, nrow(idbw.j))
     telbf.j <- rep(TRUE, nrow(idbf.j))
     telbs.j <- rep(TRUE, nrow(idbs.j))
@@ -716,7 +577,7 @@ for(i in 1:1){
     telwf.j <- rep(TRUE, nrow(idwf.j))
     telws.j <- rep(TRUE, nrow(idws.j))
     
-    #11. Estimate MC----
+    #12. Estimate MC----
     
     #Breed:Winter
     if(class(sitesbwb.j)[1]=="sf"){
@@ -917,141 +778,43 @@ for(i in 1:1){
       rbind(mc.df)
   }
   
-  #12. Save results----
-  mantel.out[[i]] <- rbindlist(mantel.list)
+  #13. Save results----
   mc.out[[i]] <- mc.df
   
   print(paste0("Finished bootstrap ", i, " of ", boot))
   
 }
 
-#13. Collapse & save results----
-mantel <- rbindlist(mantel.out)
+#14. Collapse & save results----
 mc <- rbindlist(mc.out)
 
-#write.csv(mantel, "Data/LBCUMantel.csv", row.names = FALSE)
-#write.csv(mc, "Data/LBCUMigConnectivity.csv", row.names = FALSE)
-
-mantel <- read.csv("Data/LBCUMantel.csv")
+write.csv(mc, "Data/LBCUMigConnectivity.csv", row.names = FALSE)
 mc <- read.csv("Data/LBCUMigConnectivity.csv")
 
-#14. Calculate MC per season----
+#15. Calculate MC per season----
 mc.season.sum <- mc %>% 
   group_by(nclust, targetseason, originseason) %>% 
-  summarize(MC = mean(MC),
-            MClow = mean(MClow),
-            MChigh = mean(MChigh)) %>% 
+  summarize(MCmean = mean(MC),
+            MClow = quantile(MC, 0.025),
+            MChigh = quantile(MC, 0.975)) %>% 
   ungroup() %>% 
   data.frame()
 
 ggplot(mc.season.sum) +
-  geom_point(aes(x=nclust, y=MC)) +
-#  geom_errorbar(aes(x=nclust, ymin = MClow, ymax = MChigh)) %>% 
+  geom_point(aes(x=nclust, y=MCmean)) +
+  geom_errorbar(aes(x=nclust, ymin = MClow, ymax = MChigh)) +
   facet_grid(originseason ~ targetseason)
 
-#14. Calculate MC winner----
+#16. Calculate MC winner----
 mc.sum <- mc %>% 
   group_by(nclust) %>% 
-  summarize(MC = mean(MC),
+  summarize(MCmean = mean(MC),
             MClow = quantile(MC, 0.025),
             MChigh = quantile(MC, 0.975))
 
 ggplot(mc.sum) +
-  geom_point(aes(x=nclust, y=MC)) +
+  geom_point(aes(x=nclust, y=MCmean)) +
   geom_errorbar(aes(x=nclust, ymin = MClow, ymax = MChigh))
 
-#14. Put together----
-all <- mantel %>% 
-  group_by(nclust, originseason, targetseason, boot) %>% 
-  summarize(value = 1-mean(r)) %>% 
-  ungroup() %>% 
-  mutate(metric = "mantel") %>% 
-  rbind(mc %>% 
-          dplyr::select(-MClow, -MChigh) %>% 
-          rename(value=MC) %>% 
-          mutate(metric = "MC")) %>% 
-  group_by(metric, originseason, targetseason, boot) %>% 
-  mutate(maxval = max(value),
-         vote = ifelse(value == maxval, 1, 0)) %>% 
-  ungroup()
-
-#15. Visualize----
-ggplot(mantel) + 
-  geom_boxplot(aes(x=nclust, y=r)) + 
-  facet_grid(originseason~targetseason)
-
-ggplot(mc) + 
-  geom_boxplot(aes(x=nclust, y=MC)) +
-  facet_grid(originseason~targetseason)
-
-ggplot(all) + 
-  geom_boxplot(aes(x=nclust, y=value, colour=metric)) +
-  facet_grid(originseason~targetseason)
-
-ggplot(all) + 
-  geom_boxplot(aes(x=nclust, y=vote)) +
-  facet_grid(originseason~targetseason)
- 
-ggplot(mantel) +
-  geom_boxplot(aes(x=nclust, y=r))
-
-ggplot(mc) +
-  geom_boxplot(aes(x=nclust, y=MC))
-
-ggplot(all) +
-  geom_boxplot(aes(x=nclust, y=value))
-
-ggplot(all) +
-  geom_boxplot(aes(x=nclust, y=value, colour=metric))
-
-ggplot(all) +
-  geom_boxplot(aes(x=nclust, y=vote))
-
-ggplot(mantel %>% dplyr::filter(originseason=="breed")) +
-  geom_boxplot(aes(x=nclust, y=r))
-
-ggplot(mc %>% dplyr::filter(originseason=="breed")) +
-  geom_boxplot(aes(x=nclust, y=MC))
-
-ggplot(all %>% dplyr::filter(originseason=="breed")) +
-  geom_boxplot(aes(x=nclust, y=value, colour=metric))
-
-#16. Plot by season----
-sum.mc <- mc %>% 
-  group_by(originseason, targetseason, nclust) %>% 
-  summarize(MC = mean(MC),
-            MClow = mean(MClow),
-            MChigh = mean(MChigh)) %>% 
-  ungroup() %>% 
-  arrange(-MC) %>% 
-  mutate(order = row_number())
-sum.mc
-
-ggplot(sum.mc) +
-  geom_point(aes(x=nclust, y=MC)) +
-  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
-  facet_grid(originseason~targetseason)
-
-#16. Calculate winner----
-sum.mc.all <- mc %>% 
-  group_by(nclust) %>% 
-  summarize(MC = mean(MC),
-            MClow = mean(MClow),
-            MChigh = mean(MChigh)) %>% 
-  ungroup() %>% 
-  arrange(-MC) %>% 
-  mutate(order = row_number())
-sum.mc.all
-
-sum.mantel.all <- mantel %>% 
-  group_by(nclust) %>% 
-  summarize(r = mean(r)) %>% 
-  ungroup() %>% 
-  arrange(r) %>% 
-  mutate(order = row_number())
-sum.mantel.all
-
-ggplot(sum.mc.all) +
-  geom_point(aes(x=nclust, y=MC)) +
-  geom_errorbar(aes(x=nclust, ymin=MClow, ymax=MChigh)) +
-  geom_hline(aes(yintercept=max(MC)), linetype="dashed")
+mc.sum %>% 
+  arrange(desc(MCmean))
