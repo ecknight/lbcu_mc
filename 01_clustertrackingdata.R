@@ -24,7 +24,7 @@ dat.n <- dat  %>%
 #3. Set # of bootstraps, clusters, & set up loop----
 boot <- 100
 
-clusters <- c(2:6)
+clusters <- c(2:5)
 
 dat.kde <- list()
 set.seed(1234)
@@ -83,7 +83,7 @@ for(i in 1:boot){
   dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
     pivot_wider(id_cols=id, names_from=nclust, values_from=group, names_prefix="kde_") %>% 
     left_join(dat.i) %>% 
-    pivot_longer(names_to="nclust", values_to="group", cols=kde_2:kde_6, names_prefix="kde_") %>% 
+    pivot_longer(names_to="nclust", values_to="group", cols=kde_2:kde_5, names_prefix="kde_") %>% 
     rbind(dat.man) %>% 
     mutate(boot = i)
   
