@@ -6,10 +6,6 @@ library(raster)
 library(lme4)
 library(MuMIn)
 
-#TO DO: FOR REGIONS, DECIDE ABOUT BOOTSTRAPS OR NOT####
-
-#PART A: REGIONS####
-
 #1. Set number of clusters----
 n <- c("3", "manual")
 
@@ -79,7 +75,7 @@ for(i in c(1:length(inds))){
 #9. save----
 kd.out <- kd.sp %>% 
   mutate(area = round(area)/100, 
-         rad = round(sqrt(area/pi))) %>% 
+         rad = round(sqrt(area/pi), 1)) %>% 
   separate(id, into=c("nclust", "group", "season", "bird", "year", "cluster"), remove=FALSE)
 
 write_sf(kd.out, "gis/shp/kde_individual.shp")
