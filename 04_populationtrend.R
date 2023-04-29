@@ -18,7 +18,7 @@ load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
 clusts <- unique(clust$nclust)
 indices.list <- list()
 trend.list <- list()
-for(j in 1:length(clusts)){
+for(j in 2:length(clusts)){
   
   #4. Filter data to approach----
   clust.j <- clust %>% 
@@ -58,8 +58,8 @@ for(j in 1:length(clusts)){
   mod.j$stratify_by <- "cluster"
   end.time <- Sys.time()
   
-  write_rds(mod.j, paste0("bbsBayesModels/LBCU_cluster_gamye_", clusts[j], ".rds"))
-  mod.j <- read_rds(paste0("bbsBayesModels/LBCU_cluster_gamye_", clusts[j], ".rds")) 
+  write_rds(mod.j, paste0("Results/bbsBayesModels/LBCU_cluster_gamye_", clusts[j], ".rds"))
+  mod.j <- read_rds(paste0("Results/bbsBayesModels/LBCU_cluster_gamye_", clusts[j], ".rds")) 
   
   #7. Create annual indices----
   all_area_weights <- utils::read.csv("Data/area_weight.csv") %>% 
