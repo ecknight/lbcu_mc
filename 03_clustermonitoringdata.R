@@ -134,11 +134,19 @@ knn.99 <- knn.sum %>%
 table(knn.99$id)
 #Only 50 points that have 1 instance of cluster variation
 
+knn.99.use <- knn.99 %>% 
+  group_by(id) %>% 
+  mutate(maxn = max(n)) %>% 
+  ungroup() %>% 
+  dplyr::filter(n==maxn)
+
 #7. Pick mean dominant cluster ID for each route----
-knn.final <- knn.all %>% 
-  group_by(nclust, id, X, Y, type) %>% 
-  summarize(knncluster = round(mean(as.numeric(knncluster)))) %>% 
-  ungroup()
+knn.final <- knn.sum %>% 
+  dplyr::filter(n==100) %>% 
+  rbind(knn.99.use %>% 
+          dplyr::select(-maxn)) %>% 
+  left_join(bbs.use %>% 
+              dplyr::select(-n))
 
 #8. Visualize----
 track.final <- track.raw %>% 
