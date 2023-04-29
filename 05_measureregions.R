@@ -6,10 +6,13 @@ library(raster)
 library(lme4)
 library(MuMIn)
 
+#A. INDIVIDUAL HOME RANGES####
+
 #1. Set number of clusters----
 n <- c("3", "manual")
 
 #2. Get dominant cluster id for each bird----
+#mean works because it's always just between 2 clusters
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>% 
   dplyr::filter(nclust %in% n,
                 !is.na(X)) %>% 
@@ -54,7 +57,7 @@ for(i in c(1:length(inds))){
   #7. Rasterize----
   kd.r <- raster(kd[[1]])
   kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
-  raster::writeRaster(kd.r.1, paste0("gis/raster/kde_", inds[i], ".tif"), overwrite=TRUE)
+  raster::writeRaster(kd.r.1, paste0("gis/raster_ind/kde_", inds[i], ".tif"), overwrite=TRUE)
   
   #8. Get shp of 50% isopleth----
   kd.sp.i <- try(getverticeshr(kd, percent=50) %>% 
@@ -65,7 +68,7 @@ for(i in c(1:length(inds))){
     kd.sp <- rbind(kd.sp, kd.sp.i)
   }
   else{
-    file.remove(paste0("gis/raster/kde_", inds[i], ".tif"))
+    file.remove(paste0("gis/raster_ind/kde_", inds[i], ".tif"))
   }
   
   print(paste0("Finished individual ", i, " of ", length(inds)))
@@ -101,3 +104,58 @@ summary(l1)
 ggplot(filter(kd.out, area < 10000)) +
   geom_boxplot(aes(x=season, y=log(area), fill=factor(group))) +
   facet_wrap(~nclust)
+
+#B. REGIONS####
+
+#1. Set up loop----
+regs <- dat %>% 
+  dplyr::select(nclust, group, season) %>% 
+  unique() %>% 
+  mutate(ID = paste(nclust, group, season))
+
+kd.sp <- data.frame()
+for(i in c(1:nrow(regs))){
+  
+  #2. Get centroid for each bird----
+  dat.i <- dat %>% 
+    inner_join(regs[i,]) %>% 
+    mutate(ID = paste(nclust, group, season)) %>% 
+    group_by(ID, id) %>% 
+    summarize(X=mean(X),
+              Y=mean(Y)) %>% 
+    ungroup() %>% 
+    st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
+    dplyr::select(-id) %>% 
+    as_Spatial()
+  
+  #3. Calculate KDE----
+  kd <- kernelUD(dat.i, grid = 1000, extent=2, h="href", same4all=FALSE)
+  
+  #4. Rasterize----
+  kd.r <- raster(kd[[1]])
+  kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
+  raster::writeRaster(kd.r.1, paste0("gis/raster_reg/kde_", regs$ID[i], ".tif"), overwrite=TRUE)
+  
+  #5. Get shp of 95% isopleth----
+  kd.sp.i <- try(getverticeshr(kd, percent=95) %>% 
+                   st_as_sf() %>% 
+                   st_transform(crs=4326))
+  
+  if(class(kd.sp.i)[1]=="sf"){
+    kd.sp <- rbind(kd.sp, kd.sp.i)
+  }
+  else{
+    file.remove(paste0("gis/raster/kde_", inds[i], ".tif"))
+  }
+  
+  print(paste0("Finished region ", i, " of ", nrow(regs)))
+  
+}
+
+#6. save----
+kd.out <- kd.sp %>% 
+  mutate(area = round(area)/100, 
+         rad = round(sqrt(area/pi), 1)) %>% 
+  separate(id, into=c("nclust", "group", "season"), remove=FALSE)
+
+write_sf(kd.out, "gis/shp/kde_region.shp")
