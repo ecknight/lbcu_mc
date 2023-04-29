@@ -8,7 +8,7 @@ library(raster)
 library(MigConnectivity)
 library(ebirdst)
 
-#1. Load clusters for BBS routes with LBCU on them----
+#1. Load clustered data----
 dat<- read.csv("Data/LBCUKDEClusters.csv")
 
 #2. Extract relative abundance information from eBird----
@@ -35,11 +35,11 @@ abun <- dat.abun %>%
 
 #3. Set up bootstrap loop----
 boot <- max(dat$boot)
-boot <- 10
 
 mc.out <- list()
 set.seed(1)
-for(i in 6:boot){
+#for(i in 80:boot){
+for(i in 1:5){
   
   dat.i <- dat %>%
     dplyr::filter(boot==i)
@@ -795,10 +795,11 @@ mc <- read.csv("Data/LBCUMigConnectivity.csv")
 mc.season.sum <- mc %>% 
   group_by(nclust, targetseason, originseason) %>% 
   summarize(MCmean = mean(MC),
-            MClow = quantile(MC, 0.025),
-            MChigh = quantile(MC, 0.975)) %>% 
-  ungroup() %>% 
-  data.frame()
+            MClowq = quantile(MC, 0.025),
+            MChighq = quantile(MC, 0.975),
+            MClow = mean(MClow),
+            MChigh = mean(MChigh)) %>% 
+  ungroup()
 
 ggplot(mc.season.sum) +
   geom_point(aes(x=nclust, y=MCmean)) +
@@ -809,8 +810,11 @@ ggplot(mc.season.sum) +
 mc.sum <- mc %>% 
   group_by(nclust) %>% 
   summarize(MCmean = mean(MC),
-            MClow = quantile(MC, 0.025),
-            MChigh = quantile(MC, 0.975))
+            MClowq = quantile(MC, 0.025),
+            MChighq = quantile(MC, 0.975),
+            MClow = mean(MClow),
+            MChigh = mean(MChigh)) %>% 
+  ungroup()
 
 ggplot(mc.sum) +
   geom_point(aes(x=nclust, y=MCmean)) +
