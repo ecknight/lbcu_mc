@@ -11,9 +11,10 @@ options(scipen=99999)
 n <- c("3", "manual")
 
 #1. Get dominant cluster id for each bird----
+#mean works because it's always just between 2 clusters
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
   dplyr::filter(nclust %in% n,
-                !is.na(X)) %>%
+                !is.na(X)) %>% 
   group_by(nclust, id) %>%
   summarize(group = round(mean(group))) %>%
   ungroup()
