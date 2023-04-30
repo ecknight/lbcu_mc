@@ -1,8 +1,15 @@
 library(tidyverse)
 library(brms)
 library(ggridges)
+library(usdm)
+library(lme4)
 
 options(scipen=99999)
+
+#Spring vars - t, t+1
+#Breed vars - t+1
+#Fall vars - t+1
+#Winter vars - t+1
 
 #A. TEST FOR DIFFERENCES####
 
@@ -34,7 +41,7 @@ covs <- rbind(raw, springt)
 #3. Make long-----
 covs.long <- covs %>% 
   pivot_longer(built:wetland, names_to="var", values_to="val") %>% 
-  mutate(seasonvar = paste0(season, "_", var))
+  mutate(seasonvar = paste0(var, "_", season))
 
 #4. Visualize----
 ggplot(covs.long) +
@@ -69,8 +76,8 @@ for(i in 1:nrow(loop)){
 #6. Look at results----
 #use p < 0.01 threshold based on visual inspection of plots
 out.use <- out %>% 
-  separate(seasonvar, into=c("season", "var")) %>% 
-  dplyr::filter(p < 0.01)
+  separate(seasonvar, into=c("var", "season")) %>% 
+  dplyr::filter(p < 0.001)
 
 table(out.use$var, out.use$season, out.use$nclust)
 
@@ -105,46 +112,170 @@ bbs <- bbs_data$route %>%
   rename(route = Route, lat = Latitude, lon = Longitude, year = Year) %>% 
   dplyr::select(id.route, year, count, nclust, region)
 
-#3. Link attribute data to bbs data----
-#Spring vars - t, t+1
-#Breed vars - t+1
-#Fall vars - t+1
-#Winter vars - t+1
+#3. Get environmental attributes for each region----
+raw.reg <- read.csv("Data/LBCU_environvars_region.csv")  %>% 
+  mutate(region = case_when(nclust=="3" & group==1 ~ "central",
+                            nclust=="3" & group==2 ~ "west",
+                            nclust=="3" & group==3 ~ "east",
+                            nclust=="manual" & group==1 ~ "central",
+                            nclust=="manual" & group==2 ~ "west",
+                            nclust=="manual" & group==3 ~ "east - inland",
+                            nclust=="manual" & group==4 ~ "east - coastal"))
 
-raw <- read.csv("Data/LBCU_environvars.csv") %>% 
-  mutate(conv = covcrop + covbuilt,
-         region = case_when(kdecluster==1 ~ "central", 
-                            kdecluster==2 ~ "west",
-                            kdecluster==3 ~ "east")) %>% 
-  dplyr::select(-kdecluster, -season, -year, -cluster) %>% 
-  separate(id, into=c("kdecluster", "season", "birdid", "year", "cluster"), remove=FALSE)
-
-springt <- raw %>% 
+#4. Add t-1 for spring migration attrs----
+springt.reg <- raw.reg %>% 
   dplyr::filter(season=="springmig") %>% 
   mutate(year = year-1,
          season = paste0(season, "t"))
+  
+#5. Link attribute data to bbs data----
+dat <- rbind(raw.reg, springt.reg) %>%  
+  inner_join(bbs)
 
-dat <- rbind(raw, springt) %>%  
-  rename(id.bird = id) %>% 
-  inner_join(bbs) %>% 
-  group_by(season, var) %>% 
-  mutate(val = as.numeric(scale(val))) %>% 
-  ungroup() %>% 
-  pivot_wider(names_from=c("season", "var"), values_from="val", values_fill=NA) %>% 
-  mutate(years = (year-2007)/13)
+#6. Detrend----
+#https://github.com/crushing05/WOTH_retro/blob/master/WOTH_data_prep.R
+dat <- plyr::ddply(dat, c("nclust", "region", "season"), mutate, built = resid(lm(built~year)))
+dat <- plyr::ddply(dat, c("nclust", "region", "season"), mutate, change = resid(lm(change~year)))
+dat <- plyr::ddply(dat, c("nclust", "region", "season"), mutate, crop = resid(lm(crop~year)))
+dat <- plyr::ddply(dat, c("nclust", "region", "season"), mutate, drought = resid(lm(drought~year)))
+dat <- plyr::ddply(dat, c("nclust", "region", "season"), mutate, grass = resid(lm(grass~year)))
+dat <- plyr::ddply(dat, c("nclust", "region", "season"), mutate, wetland = resid(lm(wetland~year)))
 
-#4. Check for covariance----
-covs <- dat %>% 
-  pivot_wider(names_from=c("season", "var"), values_from="val", values_fill=NA, names_sort=TRUE) %>% 
-  dplyr::select(breed_HRarea:winter_WinterHRs) %>% 
-  data.frame()%>% 
-  dplyr::select(-fallmig_dist,
-                -springmig_dist,
-                -springmigt_dist)
+#7. Scale covariates---
+dat.s <- dat %>% 
+  mutate(built = as.numeric(scale(built)),
+         change = as.numeric(scale(change)),
+         crop = as.numeric(scale(crop)),
+         drought = as.numeric(scale(drought)),
+         grass = as.numeric(scale(grass)),
+         wetland = as.numeric(scale(wetland)),
+         year = as.numeric(scale(year))) %>% 
+  dplyr::select(nclust, region, id.route, year, season, count, built, change, crop, drought, grass, wetland)
 
-covs.cor <- data.frame(cor(covs, use="na.or.complete"))
+#8. Pivot wider by season----
+dat.w <- dat.s %>% 
+  pivot_wider(values_from=built:wetland, names_from="season")
+
+#9. Check for covariance----
+covs.use1 <- dat %>% 
+  dplyr::filter(nclust=="manual", group==4) %>% 
+  dplyr::select(built, change, crop, drought, grass, seasonality, wetland)
+
+covs.cor <- data.frame(cor(covs.use1, use="na.or.complete"))
 covs.cor
 
-vif(covs)
+vif(covs.use1)
 
-#5. Test for differences----
+#let's take out seasonality
+covs.use2 <- covs.use1 %>% 
+  dplyr::select(-seasonality)
+
+vif(covs.use2)
+
+#8. Set up priors-----
+priors <- c(prior(normal(0,10), class = "Intercept"),
+            prior(normal(0,10), class = "b", coef ="years"),
+            prior(normal(0,10), class = "b", coef ="val"))
+
+#9. Set up loops----
+loop <- dat.w %>%
+  dplyr::select(nclust, region) %>% 
+  unique()
+
+mods <- list()
+for(i in 1:nrow(loop)){
+  
+  dat.i <- dat.w %>% 
+    dplyr::filter(nclust==loop$nclust[i],
+                  region==loop$region[i])
+  
+  if(loop$nclust[i]=="3"){
+    mods[[i]] <- brm(count ~ year +
+                   # built_breed +
+                   # built_fallmig +
+                   # built_winter +
+                   # change_breed +
+                   # change_springmig +
+                   # change_springmigt +
+                   # change_winter +
+                   crop_breed +
+                   crop_fallmig +
+                   crop_springmig +
+                   crop_springmigt +
+                   crop_winter +
+                   # drought_breed +
+                   # drought_winter +
+                   # grass_breed +
+                   # grass_fallmig +
+                   # grass_winter +
+                   # wetland_springmig +
+                   # wetland_springmigt +
+                   (1|id.route),
+                 family=negbinomial(),
+                 data = dat.i, 
+                 warmup = 1000, 
+                 iter   = 5000, 
+                 chains = 3, 
+                 inits  = "random",
+                 cores  = 6)
+    
+    mods[[i]] <- glmer.nb(count ~ year + 
+                        built_breed +
+                        built_fallmig +
+                        built_winter +
+                        change_breed +
+                        change_springmig +
+                        change_springmigt +
+                        change_winter +
+                        crop_breed +
+                        crop_fallmig +
+                        crop_springmig +
+                        crop_springmigt +
+                        crop_winter +
+                        drought_breed +
+                        drought_winter +
+                        grass_breed +
+                        grass_fallmig +
+                        grass_winter +
+                        wetland_springmig +
+                        wetland_springmigt +
+                        (1|id.route), data=dat.i)
+  }
+  
+  if(loop$nclust[i]=="manual"){
+    mods[[i]] <- brm(count ~ year +
+                   built_breed +
+                   built_fallmig +
+                   built_winter +
+                   change_springmig +
+                   change_springmigt +
+                   change_winter +
+                   crop_breed +
+                   crop_fallmig +
+                   crop_springmig +
+                   crop_springmigt +
+                   crop_winter +
+                   drought_breed +
+                   drought_winter +
+                   grass_breed +
+                   grass_springmig +
+                   grass_springmigt +
+                   grass_fallmig +
+                   grass_winter +
+                   wetland_fallmig +
+                   wetland_springmig +
+                   wetland_springmigt +
+                   wetland_winter + 
+                   (1|id.route),
+                 family=negbinomial(),
+                 data = dat.i, 
+                 warmup = 1000, 
+                 iter   = 5000, 
+                 chains = 3, 
+                 inits  = "random",
+                 cores  = 6)
+  }
+
+  
+  
+}
