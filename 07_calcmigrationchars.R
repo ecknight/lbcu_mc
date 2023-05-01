@@ -23,13 +23,13 @@ clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
 raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
               dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) %>% 
   inner_join(clust) %>% 
-  mutate(region = case_when(nclust=="3" & group==1 ~ "central",
-                            nclust=="3" & group==2 ~ "west",
-                            nclust=="3" & group==3 ~ "east",
-                            nclust=="manual" & group==1 ~ "central",
-                            nclust=="manual" & group==2 ~ "west",
-                            nclust=="manual" & group==3 ~ "east - inland",
-                            nclust=="manual" & group==4 ~ "east - coastal")) %>%
+  mutate(region = case_when(nclust=="3" & group==1 ~ "Central",
+                            nclust=="3" & group==2 ~ "West",
+                            nclust=="3" & group==3 ~ "East",
+                            nclust=="manual" & group==1 ~ "West",
+                            nclust=="manual" & group==2 ~ "Central",
+                            nclust=="manual" & group==3 ~ "East - inland",
+                            nclust=="manual" & group==4 ~ "East - coastal")) %>% 
   dplyr::filter(!is.na(region)) %>%
   arrange(id, date)
 
@@ -159,13 +159,13 @@ dat.hr <- read_sf("gis/shp/kde_individual.shp") %>%
               rename(bird=id)) %>% 
   data.frame() %>% 
   dplyr::select(-geometry) %>% 
-  mutate(region = case_when(nclust=="3" & group==1 ~ "central",
-                            nclust=="3" & group==2 ~ "west",
-                            nclust=="3" & group==3 ~ "east",
-                            nclust=="manual" & group==1 ~ "central",
-                            nclust=="manual" & group==2 ~ "west",
-                            nclust=="manual" & group==3 ~ "east - inland",
-                            nclust=="manual" & group==4 ~ "east - coastal")) %>%
+  mutate(region = case_when(nclust=="3" & group==1 ~ "Central",
+                            nclust=="3" & group==2 ~ "West",
+                            nclust=="3" & group==3 ~ "East",
+                            nclust=="manual" & group==1 ~ "West",
+                            nclust=="manual" & group==2 ~ "Central",
+                            nclust=="manual" & group==3 ~ "East - inland",
+                            nclust=="manual" & group==4 ~ "East - coastal")) %>% 
   dplyr::filter(area < 20000) %>% 
   mutate(area.s = scale(area))
 
