@@ -122,12 +122,12 @@ ggplot(mod.df) +
   geom_point(aes(x=var, y=Estimate, colour=region)) +
   facet_grid(season ~ nclust)
 
-
 mod.use <- mod.df %>% 
-  mutate(sig = case_when('l.80..CI' > 0 & 'u.80..CI' > 0 ~ 1,
-                         'l.80..CI' < 0 & 'u.80..CI' < 0 ~ 1,
-                         'l.80..CI' > 0 & 'u.80..CI' < 0 ~ 0,
-                         'l.80..CI' < 0 & 'u.80..CI' > 0 ~ 1))
+  rename(lower = 'l.80..CI', upper = 'u.80..CI') %>% 
+  mutate(sig = case_when(lower > 0 & upper > 0 ~ 1,
+                         lower < 0 & upper < 0 ~ 1,
+                         lower < 0 & upper > 0 ~ 0)) %>% 
+  dplyr::filter(sig==1)
 
 #7. Full models----
 
@@ -135,3 +135,41 @@ priors <- c(prior(normal(0,10), class = "Intercept"),
             prior(normal(0,10), class = "b", coef ="years"),
             prior(normal(0,10), class = "b", coef ="val"))
 
+loops <- dat %>% 
+  dplyr::select(nclust, region) %>% 
+  unique()
+
+for(i in 1:nrow(loops)){
+  
+  mod.i <- mod.use %>% 
+    dplyr::filter(nclust==loops$nclust[i],
+                  region==loops$region[i]) %>% 
+    dplyr::select(season, var) %>% 
+    unique() %>% 
+    arrange(var, season)
+  
+  dat.i <- dat %>% 
+    dplyr::filter(nclust==loops$nclust[i],
+                  region==loops$region[i]) %>% 
+    dplyr::filter(!is.na(val)) %>% 
+    inner_join(mod.i) %>% 
+    mutate(seasonvar = paste0(season, "_", var)) %>% 
+    pivot_wider(names_from="seasonvar", values_from="val") 
+  
+  mod.i <- brm(count ~ years +
+                 fallmig_Stopovers + springmig_Stopovers + springmigt_Stopovers +
+                 breed_HRarea + fallmig_HRarea + springmig_HRarea + winter_HRarea + springmigt_HRarea +
+                 winter_WinterHRs +
+                 fallmig_dist + fallmig_depart + fallmig_arrive + fallmig_duration + fallmig_rate +
+                 springmig_dist + springmig_depart + springmig_arrive + springmig_duration + springmig_rate +
+                 springmigt_dist + springmigt_depart + springmigt_arrive + springmigt_duration + springmigt_rate +
+                  (1|id.route) + (1|id.bird),
+               family=negbinomial(),
+               data = dat.i, 
+               warmup = 1000, 
+               iter   = 5000, 
+               chains = 3, 
+               inits  = "random",
+               cores  = 6)
+  
+}
