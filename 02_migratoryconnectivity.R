@@ -9,18 +9,7 @@ library(MigConnectivity)
 library(ebirdst)
 
 #1. Load clustered data----
-dat<- read.csv("Data/LBCUKDEClusters.csv")
-dat.use <- dplyr::filter(dat, nclust %in% c("3", "manual"))
-
-ggplot(dat.use %>% dplyr::filter(season=="fallmig")) +
-  geom_point(aes(x=X, y=Y, colour=distance, pch=factor(group))) +
-  facet_wrap(~nclust) +
-  scale_colour_viridis_c()
-
-ggplot(dat.use %>% dplyr::filter(season=="winter")) +
-  geom_histogram(aes(x=distance, fill=factor(group))) +
-  facet_wrap(~nclust) +
-  scale_colour_viridis_c()
+dat <- read.csv("Data/LBCUKDEClusters.csv")
 
 #2. Extract relative abundance information from eBird----
 #set_ebirdst_access_key("e7ld1bagh8n1")
@@ -48,9 +37,9 @@ abun <- dat.abun %>%
 boot <- max(dat$boot)
 
 mc.out <- list()
-set.seed(1)
-#for(i in 80:boot){
-for(i in 1:5){
+for(i in 1:boot){
+  
+  set.seed(i)
   
   dat.i <- dat %>%
     dplyr::filter(boot==i)

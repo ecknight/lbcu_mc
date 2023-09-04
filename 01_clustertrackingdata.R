@@ -47,22 +47,8 @@ for(i in 1:boot){
   
   dat.k <- dat.j %>% 
     dplyr::select(-id) 
-  
-  #5. Add manual clusters----
-  dat.man <- dat.i  %>% 
-    dplyr::filter(season=="winter") %>% 
-    mutate(group = case_when(X > -10960000 & distance < 100000 ~ 4,
-                             lon < -105 & lon > -108 & distance < 10000 ~ 2,
-                             lon < -108 & lon > -118 ~ 2,
-                             lon < -118 ~ 1,
-                             !is.na(lon) ~ 3)) %>% 
-    dplyr::select(id, group) %>% 
-    unique() %>% 
-    full_join(dat.i) %>% 
-    data.frame() %>% 
-    mutate(nclust="manual")
-  
-  #6. KDE with incomplete data clustering----
+
+  #5. KDE with incomplete data clustering----
   kde.cluster <- list()
   for(j in 1:length(clusters)){
     kde.j <- ClustImpute(dat.k, clusters[j], nr_iter=100)
@@ -71,25 +57,24 @@ for(i in 1:boot){
                                    id = dat.j$id)
   }
   
-  #7. Put together----
+  #6. Put together----
   dat.kde[[i]] <- rbindlist(kde.cluster) %>% 
     pivot_wider(id_cols=id, names_from=nclust, values_from=group, names_prefix="kde_") %>% 
     left_join(dat.i) %>% 
     pivot_longer(names_to="nclust", values_to="group", cols=kde_2:kde_5, names_prefix="kde_") %>% 
-    rbind(dat.man) %>% 
     mutate(boot = i)
   
 print(paste0("Finished bootstrap ", i, " of ", boot))
   
 }
 
-#9. Wrangle output----
+#7. Wrangle output----
 dat.out <- rbindlist(dat.kde)
 
 #check random sampling
 dat.out %>% group_by(id, season, lon, lat) %>% summarize(n=n()) %>% ungroup() %>% View()
 
-#10. Look at variation----
+#8. Look at variation----
 dat.sum <- dat.out %>%
   group_by(id, season, nclust, group) %>%
   summarize(n=n()) %>%
@@ -99,7 +84,7 @@ ggplot(dat.sum) +
   geom_histogram(aes(x=n)) +
   facet_grid(season~nclust)
 
-#11. Remove nclust with < 5 individuals in a cluster----
+#9. Remove nclust with < 5 individuals in a cluster----
 dat.n <- dat.out %>%
   dplyr::filter(season=="winter") %>%
   group_by(nclust, group) %>%
@@ -109,7 +94,7 @@ dat.n <- dat.out %>%
 dat.final <- dat.out %>%
   dplyr::filter(!nclust %in% dat.n$nclust)
 
-#12. Plot----
+#10. Plot----
 ggplot(dat.final) +
   geom_point(aes(x=X, y=Y, colour=factor(group))) +
   facet_grid(season ~ nclust, scales="free_y") + 
@@ -117,5 +102,5 @@ ggplot(dat.final) +
 
 ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
 
-#12. Save----
+#11. Save----
 write.csv(dat.out, "Data/LBCUKDEClusters.csv", row.names=FALSE)
