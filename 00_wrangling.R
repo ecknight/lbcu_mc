@@ -12,7 +12,7 @@ dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
 #1. Breeding ground means----
 breed.mn <- dat %>% 
   dplyr::filter(season=="breed") %>% 
-  group_by(id, year) %>% 
+  group_by(study, id, year) %>% 
   summarize(lat = mean(lat),
             lon = mean(lon),
             days=n()) %>% 
