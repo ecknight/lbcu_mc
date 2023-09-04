@@ -7,7 +7,8 @@ library(FactoMineR)
 options(scipen=9999)
 
 #1. Import data----
-dat <- read.csv("Data/LBCUMCLocations.csv") %>% 
+dat <- read.csv("Data/LBCUMCLocations.csv")  %>% 
+  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) %>% 
   rename(seasoncluster=cluster)
 
 #2. Use only birds with known breeding & wintering location---

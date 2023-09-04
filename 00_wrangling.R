@@ -6,8 +6,7 @@ library(ggmap)
 options(scipen=9999)
 
 #1. Read in data and filter out individuals that don't have locations for both seasons, individuals on atlantic coast
-dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872))
+dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv")
 
 #1. Breeding ground means----
 breed.mn <- dat %>% 
@@ -25,7 +24,7 @@ winter.mn <- dat %>%
   dplyr::filter(season=="winter", winter!="wintermig") %>% 
   mutate(year = ifelse(doy < 130, year-1, year),
          cluster = as.numeric(str_sub(winter, -1, -1))) %>% 
-  group_by(id, year, cluster) %>% 
+  group_by(study, id, year, cluster) %>% 
   summarize(lat = mean(lat),
             lon = mean(lon),
             days=n()) %>% 
@@ -35,7 +34,7 @@ winter.mn <- dat %>%
 #3. Stopover means----
 stop.mn <- dat %>% 
   dplyr::filter(stopover==1) %>% 
-  group_by(id, season, year, stopovercluster) %>% 
+  group_by(study, id, season, year, stopovercluster) %>% 
   summarize(lat = mean(lat),
             lon = mean(lon),
             days=n()) %>% 
@@ -74,7 +73,7 @@ mn.utm <- st_as_sf(mn.coast, coords=c("lon", "lat"), crs=4326) %>%
 
 write.csv(mn.utm, "Data/LBCUMCLocations.csv", row.names = FALSE)
 
-#6. Visualize----
+#7. Visualize----
 ggplot(mn.utm %>% dplyr::filter(season!="fallmig")) +
   geom_path(aes(x=X, y=Y, group=id)) +
   geom_point(aes(x=X, y=Y, colour=season, size=distance))
