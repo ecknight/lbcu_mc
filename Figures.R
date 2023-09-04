@@ -51,8 +51,6 @@ lake <- map_data("lakes")
 seasons <- paletteer_d("nord::victory_bonds", n=4) 
 seasons
 
-#groups <- c("#0432fd", "#c2a0ff", "#fe3517")
-
 #1. Study area figure----
 #Get data and wrangle for deployment locations----
 dep <- read.csv("/Users/ellyknight/Documents/SMBC/Analysis/lbcu_exploration/Data/LBCUCleanedData.csv") %>% 
@@ -74,6 +72,7 @@ study <- data.frame(study = unique(dep$study)) %>%
 #get eBird range
 ebd <- load_raster("/Users/ellyknight/Library/Application Support/ebirdst/lobcur-ERD2019-STATUS-20200930-da308f90", product="abundance_seasonal")
 
+#wrangle eBird range - this is slow
 breed <- projectRaster(ebd$breeding, crs="+proj=longlat +datum=WGS84 +no_defs +type=crs")
 winter <- projectRaster(ebd$nonbreeding, crs="+proj=longlat +datum=WGS84 +no_defs +type=crs")
 
@@ -112,75 +111,81 @@ plot.sa
 ggsave(plot.sa, filename="Figs/Fig1StudyArea.jpeg", width=8, height=6)
 
 #2. All tracks figure----
-raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  arrange(id, year, doy)
+raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv")
 
-all.ids <- raw %>% 
-  dplyr::select(id, year) %>% 
+#read in & wrangle data
+loc <- read.csv("Data/LBCUMCLocations.csv") %>% 
+  dplyr::filter(season=="winter") %>% 
+  mutate(manual = case_when(X > -10960000 & distance < 100000 ~ 4,
+                           lon < -105 & lon > -108 & distance < 10000 ~ 2,
+                           lon < -108 & lon > -118 ~ 2,
+                           lon < -118 ~ 1,
+                           !is.na(lon) ~ 3)) %>% 
+  dplyr::select(id, manual) %>% 
   unique() %>% 
-  group_by(id) %>% 
-  sample_n(1) %>% 
-  ungroup()
+  full_join(read.csv("Data/LBCUMCLocations.csv")) %>% 
+  mutate(season = factor(season, levels=c("winter", "springmig", "breed", "fallmig"))) %>% 
+  arrange(id, year, season, cluster)
 
-pts.spring <- raw %>% 
-  dplyr::filter(lead(segment)=="depart" & season=="winter" |
-                segment=="arrive" & season=="breed" |
-                stopover==1 & season=="springmig", 
-                !is.na(season),
-                !(season=="breed" & lat < 35))
+#separate into spring and fall
+loc.spring <- loc %>% 
+  dplyr::filter(season!="fallmig") %>% 
+  mutate(plot=paste0(id, "-", year))
 
-all.spring <- raw %>% 
-  dplyr::filter(season=="springmig",
-                segment=="migration") %>% 
-  rbind(pts.spring) %>% 
-  arrange(id, year, doy)
-  
+loc.fall <- loc %>% 
+  dplyr::filter(season!="springmig") %>% 
+  mutate(plot=paste0(id, "-", year))
 
-pts.fall <- raw %>% 
-  dplyr::filter(lead(segment)=="depart" & season=="breed" |
-                  segment=="arrive" & season=="winter" |
-                  stopover==1 & season=="fallmig",  
-                !is.na(season))
+#define migratory divides
+div <- data.frame(div=rep(c("1-2", "2-3", "3-4"), 2),
+         type=c(rep("start", 3), rep("end", 3)),
+         lat = c(55, 52, 54,
+                 32, 22, 18),
+         lon = c(-118, -113.2, -111,
+                 -118, -111.2, -97),
+         season = rep("season", 6))
 
-all.fall <- raw %>% 
-  dplyr::filter(season=="fallmig",
-                segment=="migration") %>% 
-  rbind(pts.fall) %>% 
-  arrange(id, year, doy)
-
+#plot spring
 plot.spring <- ggplot() +
   geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
   geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
   coord_sf(xlim=c(-129, -75), ylim=c(15, 57), expand = FALSE, crs=4326) +
-  geom_line(data=all.spring, aes(x=lon, y=lat, group=id), colour="grey30", alpha = 0.4) +
-  geom_point(data=pts.spring, aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
+  geom_line(data=loc.spring, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.4) +
+  geom_point(data=loc.spring, aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
   xlab("") +
   ylab("") +
   map.theme +
+  geom_line(data=div, aes(x=lon, y=lat, group=div), linetype="dashed", size=1) +
   ggtitle("Prebreeding migration") +
-  scale_fill_manual(values=as.character(seasons[c(2,3,4)]))
-plot.spring
+  scale_fill_manual(values=as.character(seasons[c(4,3,1)]))
+#plot.spring
 
+#plot fall
 plot.fall <- ggplot() +
   geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
   geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
   coord_sf(xlim=c(-129, -75), ylim=c(15, 57), expand = FALSE, crs=4326) +
-  geom_line(data=all.fall, aes(x=lon, y=lat, group=id), colour="grey30", alpha = 0.4) +
-  geom_point(data=pts.fall, aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
+  geom_line(data=loc.fall, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.4) +
+  geom_point(data=loc.fall, aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
   xlab("") +
   ylab("") +
   map.theme +
+  geom_line(data=div, aes(x=lon, y=lat, group=div), linetype="dashed", size=1) +
   ggtitle("Postbreeding migration")  +
-  scale_fill_manual(values=as.character(seasons[c(2,3,4)]))
-plot.fall
+  scale_fill_manual(values=as.character(seasons[c(4,1,3)]))
+#plot.fall
 
+#make legend
 plot.legend <- ggplot() +
-  geom_point(data=sample_n(pts.fall, 10), aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
-  scale_fill_manual(values=as.character(seasons[c(2,3,4)]), name="Season", labels=c("Breeding", "Migration\nstopover", "Stationary\nnonbreeding")) + 
+  geom_point(data=sample_n(loc.fall, 10), aes(x=lon, y=lat, fill=season), pch=21, colour="grey65", alpha = 0.7, size=3) +
+  geom_line(data=div, aes(x=lon, y=lat, group=div, linetype=season), size=1) +
+  scale_fill_manual(values=as.character(seasons[c(4,1,3)]), name="Season", labels=c("Stationary\nnonbreeding",  "Breeding", "Migration\nstopover")) + 
+  scale_linetype_manual(values=c("dashed"), labels=c("Hypothesized\nmigratory divide"), name="") +
   theme(legend.position = "bottom")
 #plot.legend
 legend <- cowplot::get_legend(plot.legend)
 
+#put together and save
 ggsave(grid.arrange(plot.spring, plot.fall, legend,
                     heights = c(4,1),
                     widths = c(4,4),
