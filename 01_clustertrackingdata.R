@@ -7,7 +7,9 @@ library(FactoMineR)
 options(scipen=9999)
 
 #1. Import data----
-dat <- read.csv("Data/LBCUMCLocations.csv")  %>% 
+raw <- read.csv("Data/LBCUMCLocations.csv")
+
+dat <- raw %>% 
   dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) %>% 
   rename(seasoncluster=cluster)
 
@@ -30,8 +32,9 @@ clusters <- c(2:5)
 dat.kde <- list()
 for(i in 1:boot){
   
-  #4. Pick one point for each season for each individual & make it wide----
   set.seed(i)
+  
+  #4. Pick one point for each season for each individual & make it wide----
   dat.i <- dat %>% 
     dplyr::filter(id %in% dat.n$id) %>% 
     group_by(id, season) %>% 
