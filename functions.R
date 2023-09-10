@@ -6,7 +6,7 @@ extract_index_data <- function (jags_mod = NULL, alt_n = "n", jags_data = NULL)
   
   n <- jags_mod$sims.list[[alt_n]]
 
-  bugs_data <- dat.j
+  bugs_data <- dat
 
   y_min <- bugs_data$ymin
   y_max <- bugs_data$ymax
