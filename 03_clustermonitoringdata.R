@@ -80,47 +80,43 @@ ggplot() +
 write.csv(bbs.use, "Data/BBSRoutesToUse.csv", row.names=FALSE)
 
 #4. Set # of clusters---
-clusts <- c("3", "manual")
+clusts <- c("3")
 
 #B. PREDICT TO BBS DATA####
 
 #1. Set up bootstrap loop----
 boot <- max(track.raw$boot)
 
-set.seed(1234)
 knn.out <- list()
-knn.all <- data.frame()
-for(h in 1:length(clusts)){
+for(i in 1:boot){
   
-  for(i in 1:boot){
-    
-    #2. Wrangle tracking data----
-    track.i <- track.raw %>% 
-      dplyr::filter(nclust==clusts[h],
-                    boot==i,
-                    season=="breed")
-    
-    #3. Put together with BBS data----
-    bbs.i <- bbs.use %>% 
-      dplyr::select(id, X, Y, type)
-    
-    #4. KNN----
-    knn.i <- knn(train=track.i[,c("X", "Y")], test=bbs.i[,c("X", "Y")], cl=track.i$group, k=10, prob=TRUE)
-    
-    knn.out[[i]] <- data.frame(knncluster=knn.i,
-                               knnprob=attr(knn.i, "prob"),
-                               boot=i,
-                               nclust=clusts[h]) %>% 
-      cbind(bbs.i)
-    
-    print(paste0("Finished bootstrap ", i, " of ", boot))
-    
-  }
+  set.seed(i)
   
-  #5. Collapse results----
-  knn.all <- rbindlist(knn.out) %>% 
-    rbind(knn.all)
+  #2. Wrangle tracking data----
+  track.i <- track.raw %>% 
+    dplyr::filter(nclust==clusts,
+                  boot==i,
+                  season=="breed")
+  
+  #3. Put together with BBS data----
+  bbs.i <- bbs.use %>% 
+    dplyr::select(id, X, Y, type)
+  
+  #4. KNN----
+  knn.i <- knn(train=track.i[,c("X", "Y")], test=bbs.i[,c("X", "Y")], cl=track.i$group, k=10, prob=TRUE)
+  
+  knn.out[[i]] <- data.frame(knncluster=knn.i,
+                             knnprob=attr(knn.i, "prob"),
+                             boot=i,
+                             nclust=clusts) %>% 
+    cbind(bbs.i)
+  
+  print(paste0("Finished bootstrap ", i, " of ", boot))
+  
 }
+
+#5. Collapse results----
+knn.all <- rbindlist(knn.out)
 
 #6. Look at variation in cluster membership----
 knn.sum <- knn.all %>% 
@@ -132,19 +128,20 @@ summary(knn.sum$n)
 knn.99 <- knn.sum %>% 
   dplyr::filter(n < 100)
 table(knn.99$id)
-#Only 50 points that have 1 instance of cluster variation
+length(unique(knn.99$id))
+#88 points that have 1 instance of cluster variation
 
-knn.99.use <- knn.99 %>% 
+#7. Pick mode cluster ID for each route----
+# Create the function.
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+knn.final <- knn.all %>% 
   group_by(id) %>% 
-  mutate(maxn = max(n)) %>% 
+  summarize(knncluster = getmode(knncluster)) %>% 
   ungroup() %>% 
-  dplyr::filter(n==maxn)
-
-#7. Pick mean dominant cluster ID for each route----
-knn.final <- knn.sum %>% 
-  dplyr::filter(n==100) %>% 
-  rbind(knn.99.use %>% 
-          dplyr::select(-maxn)) %>% 
   left_join(bbs.use %>% 
               dplyr::select(-n))
 
@@ -160,13 +157,13 @@ ggplot(knn.final) +
 
 #9. Calculate MCP area for BBSbayes-----
 sp <- SpatialPointsDataFrame(coords=cbind(knn.final$X, knn.final$Y), 
-                               data=data.frame(ID=paste0(knn.final$nclust, "-", knn.final$knncluster)),
+                               data=data.frame(ID=knn.final$knncluster),
                                proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
 
 mp <- mcp(sp[,1], percent=100)
 
 knn.area <- data.frame(mp) %>% 
-  separate(id, into=c("nclust", "knncluster"))
+  rename(knncluster = id)
 
 #15. Save out----
 write.csv(knn.area, "Data/area_weight.csv", row.names = FALSE)
