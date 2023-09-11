@@ -8,7 +8,7 @@ library(data.table)
 
 options(scipen=99999)
 
-n <- c("3", "manual")
+n <- c("3")
 
 #1. Get dominant cluster id for each bird----
 #mean works because it's always just between 2 clusters
@@ -25,11 +25,7 @@ raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
   inner_join(clust) %>% 
   mutate(region = case_when(nclust=="3" & group==1 ~ "Central",
                             nclust=="3" & group==2 ~ "West",
-                            nclust=="3" & group==3 ~ "East",
-                            nclust=="manual" & group==1 ~ "West",
-                            nclust=="manual" & group==2 ~ "Central",
-                            nclust=="manual" & group==3 ~ "East - inland",
-                            nclust=="manual" & group==4 ~ "East - coastal")) %>% 
+                            nclust=="3" & group==3 ~ "East")) %>% 
   dplyr::filter(!is.na(region)) %>%
   arrange(id, date)
 
@@ -154,18 +150,15 @@ dat.hr <- read_sf("gis/shp/kde_individual.shp") %>%
   cbind(read_sf("gis/shp/kde_individual.shp")) %>% 
   mutate(group = as.numeric(group),
          bird = as.numeric(bird),
-         year = as.numeric(year)) %>% 
+         year = as.numeric(year),
+         nclust = as.numeric(nclust)) %>% 
   left_join(clust %>% 
               rename(bird=id)) %>% 
   data.frame() %>% 
   dplyr::select(-geometry) %>% 
   mutate(region = case_when(nclust=="3" & group==1 ~ "Central",
                             nclust=="3" & group==2 ~ "West",
-                            nclust=="3" & group==3 ~ "East",
-                            nclust=="manual" & group==1 ~ "West",
-                            nclust=="manual" & group==2 ~ "Central",
-                            nclust=="manual" & group==3 ~ "East - inland",
-                            nclust=="manual" & group==4 ~ "East - coastal")) %>% 
+                            nclust=="3" & group==3 ~ "East")) %>% 
   dplyr::filter(area < 20000) %>% 
   mutate(area.s = scale(area))
 
