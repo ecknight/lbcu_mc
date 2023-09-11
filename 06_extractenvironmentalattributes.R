@@ -259,7 +259,11 @@ pts <- avail %>%
           cbind(kde) %>% 
           data.frame() %>% 
           dplyr::select(group, season, year, id, X, Y) %>% 
-          mutate(type = "used"))
+          mutate(type = "used")) %>% 
+  arrange(year, season, group) %>% 
+  group_by(year, season, group) %>% 
+  mutate(index = row_number()-1) %>% 
+  ungroup()
 
 #5. Define radius (mean HR size)----
 rad <- kde %>% 
@@ -346,27 +350,25 @@ files <- list.files("gis/output_rsf")
 dat <- data.frame()
 for(i in 1:length(files)){
   dat <- read.csv(paste0("gis/output_rsf/", files[i])) %>%
-    dplyr::select(-.geo, -system.index) %>% 
+    dplyr::select(-.geo) %>% 
     mutate(id = str_sub(files[i], -100, -5)) %>% 
+    rename(index = system.index) %>% 
     rbind(dat)
 }
 
 #14. Join to other data and tidy----
-covs <- dat  %>% 
-  separate(id, into=c("nclust", "group", "season", "bird", "year", "cluster"), remove=FALSE) %>% 
+covs <- dat %>% 
+  separate(id, into=c("year", "season", "group"), remove=TRUE) %>% 
   mutate(year = as.numeric(year)) %>% 
-  #  mutate(id=paste(group, season, birdid, year, cluster, sep="-")) %>% 
-  left_join(kde.raw %>% 
-              st_coordinates() %>% 
-              data.frame() %>% 
-              cbind(data.frame(kde.raw)) %>% 
-              dplyr::select(-id, -geometry)) %>% 
+  arrange(year, season, group, index) %>% 
+  full_join(pts) %>% 
   mutate(change = ifelse(is.na(change), 0, change),
          seasonality = ifelse(is.na(seasonality), 0, seasonality),
          crop = ifelse(is.na(crop), 0, crop),
          drought = ifelse(is.na(drought), 0, drought),
          grass = ifelse(is.na(grass), 0, grass),
-         wetland = ifelse(is.na(wetland), 0, wetland))
+         wetland = ifelse(is.na(wetland), 0, wetland),
+         built = ifelse(is.na(built), 0, built))
 
 #16. Save-----
 write.csv(covs, "Data/LBCU_environvars_RSF.csv", row.names = FALSE)
