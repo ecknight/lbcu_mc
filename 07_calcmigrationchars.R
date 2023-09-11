@@ -189,6 +189,10 @@ dat.all <- dat.mig %>%
                  season="winter")) %>% 
   rbind(dat.rate %>% 
           dplyr::select(-group) %>% 
-          pivot_longer(dist:rate, values_to = "val", names_to="var"))
+          pivot_longer(dist:rate, values_to = "val", names_to="var")) %>% 
+  rbind(dat.stop %>% 
+          dplyr::select(nclust, region, id, year, season, n) %>% 
+          rename(val=n) %>% 
+          mutate(var = "stopoverduration"))
 
 write.csv(dat.all, "Data/MovementBehaviours.csv", row.names = FALSE)
