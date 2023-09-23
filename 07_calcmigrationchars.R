@@ -23,9 +23,9 @@ clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
 raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
               dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) %>% 
   inner_join(clust) %>% 
-  mutate(region = case_when(nclust=="3" & group==1 ~ "Central",
-                            nclust=="3" & group==2 ~ "West",
-                            nclust=="3" & group==3 ~ "East")) %>% 
+  mutate(region = case_when(group==1 ~ "Central",
+                            group==2 ~ "West",
+                            group==3 ~ "East")) %>% 
   dplyr::filter(!is.na(region)) %>%
   arrange(id, date)
 
@@ -53,7 +53,7 @@ dat.dur <- raw %>%
 
 #Calculate distance
 traj <- as.ltraj(xy=raw[,c("X", "Y")],
-                 id=paste0(raw$nclust, "-", raw$id),
+                 id=raw$id,
                  date=raw$date,
                  typeII=FALSE,
                  proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
@@ -61,11 +61,11 @@ names(traj) <- unique(raw$id)
 
 dat.traj <- rbindlist(traj, idcol=TRUE) %>% 
   rename(id='.id', X=x, Y=y) %>% 
-  separate(id, into=c("nclust", "id")) %>% 
   mutate(id=as.numeric(id)) %>% 
-  arrange(nclust, id, date) %>% 
+  arrange(id, date) %>% 
   dplyr::select(dist) %>% 
-  cbind(raw) %>% 
+  cbind(raw %>% 
+          arrange(id, date)) %>% 
   mutate(dist = dist/1000)
 
 #migrations that weren't completed (from data cleaning script) plus last individual who didn't have data for the first leg of migration
@@ -136,11 +136,11 @@ dat.wint <- raw %>%
 dat.stop <- raw %>% 
   dplyr::filter(season %in% c("springmig", "fallmig"),
                 stopover==1) %>% 
-  group_by(nclust, region, id, year, season, stopovercluster) %>% 
+  group_by(nclust, region, id, year, season) %>% 
   summarize(n = n()) %>% 
   ungroup()
 
-#7. Wrangle home range size----
+#8. Wrangle home range size----
 dat.hr <- read_sf("gis/shp/kde_individual.shp") %>% 
   st_make_valid() %>% 
   st_centroid() %>% 
@@ -162,7 +162,7 @@ dat.hr <- read_sf("gis/shp/kde_individual.shp") %>%
   dplyr::filter(area < 20000) %>% 
   mutate(area.s = scale(area))
 
-#8. Wrangle number of wintering home ranges----
+#9. Wrangle number of wintering home ranges----
 dat.wint <- dat.hr %>% 
   dplyr::filter(season=="winter") %>% 
   group_by(nclust, season, region, group, bird, year) %>% 
