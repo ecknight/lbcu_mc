@@ -389,165 +389,118 @@ ggsave(grid.arrange(plot.map, plot.bar, plot.index, legend,
 
 #5. Behavioural attributes----
 
+#migration departure and arrival date, migration duration, migration distance, migration rate, number of migration stopovers, migration stopover duration, number of wintering home ranges, and core stopover or home range size
+
 #5a. Get data----
-dat.mig <- read.csv("Data/MigrationStopovers.csv") %>% 
-  rename(Group = region) %>% 
-  mutate(n = as.numeric(n)) %>% 
-  mutate(n = case_when(Group=="west" ~ (n-0.2),
-                       Group=="central" ~ n,
-                       Group=="east" ~ (n + 0.2)))
-dat.mig$season <- factor(dat.mig$season, levels=c("fallmig", "springmig"),
-                         labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.mig$Group <- factor(dat.mig$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East")) 
-
-dat.stop <- read.csv("Data/MigrationStopoverLength.csv") %>% 
-  rename(Group = region) %>% 
-  mutate(n = as.numeric(n)) %>% 
-  mutate(n = case_when(Group=="west" ~ (n-0.2),
-                       Group=="central" ~ n,
-                       Group=="east" ~ (n + 0.2)))
-dat.stop$season <- factor(dat.stop$season, levels=c("fallmig", "springmig"),
-                         labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.stop$Group <- factor(dat.stop$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East")) 
-
-dat.dur <- read.csv("Data/MigrationTiming.csv") %>% 
-  rename(Group = region)
-dat.dur$season <- factor(dat.dur$season, levels=c("fallmig", "springmig"),
-                         labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.dur$Group <- factor(dat.dur$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
-
-dat.dist <- read.csv("Data/MigrationDistance.csv") %>% 
-  rename(Group = region)
-dat.dist$season <- factor(dat.dist$season, levels=c("fallmig", "springmig"),
-                         labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.dist$Group <- factor(dat.dist$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
-
-dat.rate <- read.csv("Data/MigrationRate.csv") %>% 
-  rename(Group = region)
-dat.rate$season <- factor(dat.rate$season, levels=c("fallmig", "springmig"),
-                          labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.rate$Group <- factor(dat.rate$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
-
-dat.wint <- read.csv("Data/WinterHRs.csv") %>% 
-  rename(Group = region) %>% 
-  mutate(n = as.numeric(n)) %>% 
-  mutate(n = case_when(Group=="west" ~ (n-0.1),
-                       Group=="central" ~ n,
-                       Group=="east" ~ (n + 0.05)))
-dat.wint$season <- factor(dat.wint$season, levels=c("fallmig", "springmig"),
-                          labels=c("Postbreeding\nmigration", "Prebreeding\nmigration"))
-dat.wint$Group <- factor(dat.wint$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
-
-dat.hr <- read.csv("Data/WinterHRSize.csv") %>% 
-  rename(Group = region)
-dat.hr$season <- factor(dat.hr$season, levels=c("breed", "fallmig", "winter", "springmig"),
-                          labels=c("Breeding", "Postbreeding\nmigration", "Nonbreeding", "Prebreeding\nmigration"))
-dat.hr$Group <- factor(dat.hr$Group, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
+dat <- read.csv("Data/MovementBehaviours.csv")
+dat$season <- factor(dat$season, levels=c("springmig", "winter", "fallmig", "breed"),
+                     labels=c("Prebreeding\nmigration", "Nonbreeding", "Postbreeding\nmigration",  "Breeding"))
+dat$Group <- factor(dat$region, levels=c("West", "Central", "East"))
 
 #5b. Departure----
-plot.dep <- ggplot(dat.dur) +
-  geom_density_ridges(aes(x=depart, y=season, fill=Group), alpha = 0.4) + 
+plot.dep <- ggplot(dat %>% dplyr::filter(var=="depart")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
   my.theme +
   xlab("Day of migration departure season") +
   ylab("") +
   scale_x_continuous(breaks=c(32, 91, 152, 213), labels=c("Feb", "Apr", "Jun", "Aug")) +
-  scale_fill_manual(values=groups) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
   theme(legend.position = "none")
 plot.dep
 
 #5c. Arrival----
-plot.arr <- ggplot(dat.dur) +
-  geom_density_ridges(aes(x=arrive, y=season, fill=Group), alpha = 0.4) + 
+plot.arr <- ggplot(dat %>% dplyr::filter(var=="arrive")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
   my.theme +
   xlab("Day of migration arrival season") +
   ylab("") +
   scale_x_continuous(breaks=c(91, 152, 213, 274), labels=c("Apr", "Jun", "Aug", "Oct")) +
-  scale_fill_manual(values=groups) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.arr
 
 #5d. Duration----
-plot.dur <- ggplot(dat.dur) +
-  geom_density_ridges(aes(x=duration, y=season, fill=Group), alpha = 0.4) + 
+plot.dur <- ggplot(dat %>% dplyr::filter(var=="duration")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
   my.theme +
   xlab("Days of migration") +
   ylab("") +
-  scale_fill_manual(values=groups) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.dur
 
-#5e. Stopovers----
-plot.stop <- ggplot(dat.mig) +
-  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4, stat="binline") + 
-  my.theme +
-  xlab("Number of migration stopovers") +
-  ylab("") +
-  scale_fill_manual(values=groups) +
-  theme(axis.text.y = element_blank()) +
-  theme(legend.position = "none")
-plot.stop
-
-#5f. Stopover duration----
-plot.stopdur <- ggplot(dat.stop) +
-  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4) + 
-  my.theme +
-  xlab("Total days of migration stopover") +
-  ylab("") +
-  scale_fill_manual(values=groups) +
-  theme(axis.text.y = element_blank()) +
-  theme(legend.position = "none")
-plot.stopdur
-
-#5f. Distance----
-plot.dist <- ggplot(dat.dist) +
-  geom_density_ridges(aes(x=dist, y=season, fill=Group), alpha = 0.4) + 
+#5e. Distance----
+plot.dist <- ggplot(dat %>% dplyr::filter(var=="dist")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
   my.theme +
   xlab("Migration distance (km)") +
   ylab("") +
-  scale_fill_manual(values=groups) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.dist
 
-#5g. Rate----
-plot.rate <- ggplot(dat.rate) +
-  geom_density_ridges(aes(x=rate, y=season, fill=Group), alpha = 0.4) + 
+#5f. Rate----
+plot.rate <- ggplot(dat %>% dplyr::filter(var=="rate")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
   my.theme +
   xlab("Migration rate (km/day)") +
   ylab("") +
-  scale_fill_manual(values=groups) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
   theme(legend.position = "none")
 plot.rate
 
-#5h. Range area----
-plot.hr <- ggplot(dat.hr) +
-  geom_density_ridges(aes(x=log(area), y=season, fill=Group), alpha = 0.4) + 
+#5g. Stopovers----
+plot.stop <- ggplot(dat %>% dplyr::filter(var=="Stopovers")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, stat="binline", position=position_dodge(width=1), scale=1) + 
   my.theme +
-  xlab("Natural log of use area") +
+  xlab("Number of migration stopovers") +
   ylab("") +
-  scale_fill_manual(values=groups) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
+  theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
-plot.hr
+plot.stop
+
+#5h. Stopover duration----
+plot.stopdur <- ggplot(dat %>% dplyr::filter(var=="stopoverduration")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
+  my.theme +
+  xlab("Total days of migration stopover") +
+  ylab("") +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
+  theme(axis.text.y = element_blank()) +
+  theme(legend.position = "none")
+plot.stopdur
 
 #5i. Number of wintering ranges----
-plot.wint <- ggplot(dat.wint) +
-  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4, stat="binline") + 
+plot.wint <- ggplot(dat %>% dplyr::filter(var=="WinterHRs")) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, stat="binline", position=position_dodge(width=0.2), scale=1) + 
   my.theme +
   xlab("Number of wintering home ranges") +
   ylab("") +
-  scale_fill_manual(values=groups) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
   theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank()) +
   scale_x_continuous(breaks=c(1,2,3), labels=c(1,2,3)) +
   theme(legend.position = "none")
 plot.wint
 
+#5j. Range area----
+plot.hr <- ggplot(dat %>% dplyr::filter(var=="HRarea")) +
+  geom_density_ridges(aes(x=log(val), y=season, fill=Group), alpha = 0.4, scale=1) + 
+  my.theme +
+  xlab("Natural log of use area") +
+  ylab("") +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
+  theme(legend.position = "none")
+plot.hr
+
 #5j. Legend----
-plot.legend <- ggplot(dat.wint) +
-  geom_density_ridges(aes(x=n, y=season, fill=Group), alpha = 0.4, stat="binline") +
-  scale_fill_manual(values=groups) +
+plot.legend <- ggplot(dat) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, stat="binline", scale=1) +
+  scale_fill_manual(values=groups[c(1,3,5)]) +
   theme(legend.position = "right")
 plot.legend
 legend <- cowplot::get_legend(plot.legend)
@@ -807,97 +760,117 @@ sd(route$SpeciesTotal)
 table(clust$knncluster)
 
 #8e. Movement chars----
-dat.mig <- read.csv("Data/MigrationStopovers.csv") 
-dat.dur <- read.csv("Data/MigrationTiming.csv")
-dat.dist <- read.csv("Data/MigrationDistance.csv")
-dat.rate <- read.csv("Data/MigrationRate.csv")
-dat.wint <- read.csv("Data/WinterHRs.csv")
-dat.hr <- read.csv("Data/WinterHRSize.csv")
+dat.all <- read.csv("Data/MovementBehaviours.csv")
 
 #Distance
-dat.dist %>% 
+dat.all %>%
+  dplyr::filter(var=="dist") %>% 
   group_by(region) %>% 
-  summarize(dist= mean(dist))
+  summarize(dist= mean(val))
 
-dat.dist %>% 
+dat.all %>%
+  dplyr::filter(var=="dist") %>% 
   group_by(region, season) %>% 
-  summarize(dist= mean(dist))
+  summarize(dist= mean(val))
 
-dat.dist %>% 
+dat.all %>%
+  dplyr::filter(var=="dist") %>% 
   group_by(season) %>% 
-  summarize(dist= mean(dist))
+  summarize(dist= mean(val))
 
 #Duration
-dat.dur %>% 
+dat.all %>%
+  dplyr::filter(var=="duration") %>% 
   group_by(region) %>% 
-  summarize(dist= mean(duration))
+  summarize(duration= mean(val))
 
-dat.dur %>% 
-  group_by(season) %>% 
-  summarize(dist= mean(duration))
-
-dat.dur %>% 
+dat.all %>%
+  dplyr::filter(var=="duration") %>% 
   group_by(region, season) %>% 
-  summarize(dist= mean(duration))
+  summarize(duration= mean(val))
+
+dat.all %>%
+  dplyr::filter(var=="duration") %>% 
+  group_by(season) %>% 
+  summarize(duration= mean(val))
 
 #Departure
-dat.dur %>% 
+dat.all %>%
+  dplyr::filter(var=="depart") %>% 
   group_by(region) %>% 
-  summarize(depart= mean(depart))
+  summarize(depart= mean(val))
 
-dat.dur %>% 
-  group_by(season, region) %>% 
-  summarize(depart= mean(depart))
+dat.all %>%
+  dplyr::filter(var=="depart") %>% 
+  group_by(region, season) %>% 
+  summarize(depart= mean(val))
 
 #Arrival
-dat.dur %>% 
+dat.all %>%
+  dplyr::filter(var=="arrive") %>% 
   group_by(region) %>% 
-  summarize(arrive= mean(arrive))
+  summarize(arrive= mean(val))
 
-dat.dur %>% 
-  group_by(season, region) %>% 
-  summarize(arrive= mean(arrive))
+dat.all %>%
+  dplyr::filter(var=="arrive") %>% 
+  group_by(region, season) %>% 
+  summarize(arrive= mean(val))
 
 #Stopovers
-dat.mig %>% 
+dat.all %>%
+  dplyr::filter(var=="Stopovers") %>% 
   group_by(region) %>% 
-  summarize(n= mean(n))
+  summarize(stopovers= mean(val))
 
-dat.mig %>% 
+dat.all %>%
+  dplyr::filter(var=="Stopovers") %>% 
   group_by(region, season) %>% 
-  summarize(n= mean(n))
+  summarize(stopovers= mean(val))
 
-dat.mig %>% 
+dat.all %>%
+  dplyr::filter(var=="Stopovers") %>% 
   group_by(season) %>% 
-  summarize(n= mean(n))
+  summarize(stopovers= mean(val))
+
+#Stopover days
+dat.all %>%
+  dplyr::filter(var=="stopoverduration") %>% 
+  group_by(season) %>% 
+  summarize(stopovers= mean(val))
 
 #Rate
-dat.rate %>% 
+dat.all %>%
+  dplyr::filter(var=="rate") %>% 
   group_by(region) %>% 
-  summarize(rate= mean(rate))
+  summarize(rate= mean(val))
 
-dat.rate %>% 
-  group_by(season, region) %>% 
-  summarize(rate= mean(rate))
+dat.all %>%
+  dplyr::filter(var=="rate") %>% 
+  group_by(region, season) %>% 
+  summarize(rate= mean(val))
 
-dat.rate %>% 
+dat.all %>%
+  dplyr::filter(var=="rate") %>% 
   group_by(season) %>% 
-  summarize(rate= mean(rate))
+  summarize(rate= mean(val))
 
 #Areas
-dat.hr %>% 
-  group_by(region) %>% 
-  summarize(area= mean(area))
-
-dat.hr %>% 
-  group_by(season, region) %>% 
-  summarize(area= mean(area))
-
-dat.hr %>% 
+dat.all %>%
+  dplyr::filter(var=="HRarea") %>% 
   group_by(season) %>% 
-  dplyr::filter(region!="west") %>% 
-  summarize(area= mean(area),
-            sd = sd(area, na.rm=TRUE))
+  summarize(area= mean(val))
+
+dat.all %>%
+  dplyr::filter(var=="HRarea") %>% 
+  group_by(region, season) %>% 
+  summarize(area= mean(val))
+
+dat.all %>%
+  dplyr::filter(var=="HRarea") %>% 
+  group_by(season) %>% 
+  dplyr::filter(region!="Central") %>% 
+  summarize(area= mean(val),
+            sd = sd(val, na.rm=TRUE))
 
 #Distance between wintering hrs
 kd.wint <- read_sf("gis/shp/kde_individual.shp") %>% 
