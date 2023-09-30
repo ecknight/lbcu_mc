@@ -130,7 +130,7 @@ for(i in 1:nrow(loop)){
     mutate(change2=change^2)
   
   #6. Model----
-  m.list[[i]] <- glmer(response ~ crop + grass + seasonality + change + drought + wetland + (1|bird), family = "binomial", data=dat.i, na.action = "na.fail")
+  m.list[[i]] <- glm(response ~ crop + grass + seasonality + change + drought + wetland, family = "binomial", data=dat.i, na.action = "na.fail")
   
   #7. Save summary----
   s.list[[i]] <- summary(m.list[[i]])$coefficients %>% 
@@ -178,11 +178,11 @@ dredged.plot <- dredged %>%
   left_join(summary)
 
 ggplot(dredged.plot) + 
-  geom_errorbar(aes(x=season, ymin=Estimate-se, ymax=Estimate+se, colour=Region),
+  geom_errorbar(aes(x=Region, ymin=Estimate-se, ymax=Estimate+se, colour=Region),
                 position="dodge", width=1) +
   #  geom_point(aes(x=season, y=Estimate, colour=Region), position = position_dodge(width=1)) +
   geom_hline(aes(yintercept=0)) +
-  facet_wrap(~cov, scales="free_y")
+  facet_grid(cov~season, scales="free_y")
 
 #10. Visualize used & available----
 dat.long <- dat %>% 
@@ -204,10 +204,55 @@ plot(ma)
 #12. Test for functional response across groups----
 
 #5. Subset data----
-dat.i <- dat %>% 
-  dplyr::filter(Region==loop$Region[i],
-                season==loop$season[i]) %>% 
-  mutate(change2=change^2)
+seasons <- unique(dat$season)
 
-#6. Model----
-m.list[[i]] <- glmer(response ~ crop + grass + seasonality + change + drought +  (1|bird), family = "binomial", data=dat.i, na.action = "na.fail")
+newdat <- 
+
+m.int <- list()
+s.int <- list()
+d.int <- list()
+for(i in 1:length(seasons)){
+  
+  dat.i <- dat %>% 
+    dplyr::filter(season==seasons[i]) %>% 
+    mutate(change2=change^2)
+  
+  m.int[[i]] <- glm(response ~ crop*Region + grass*Region + seasonality*Region + change*Region + drought*Region, family = "binomial", data=dat.i, na.action = "na.fail")
+  
+  # m.int[[i]] <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality + seasonality:Region + change + change:Region + drought + drought:Region, family = "binomial", data=dat.i, na.action = "na.fail")
+  
+  s.int[[i]] <- summary(m.int[[i]])$coefficients %>% 
+    data.frame() %>% 
+    mutate(season = seasons[i],
+           cov = row.names(summary(m.int[[i]])$coefficients)) 
+  
+  d.int[[i]] <- dredge(m.int[[i]]) %>% 
+    data.frame() %>% 
+    mutate(season = seasons[i])
+  
+}
+
+dredged.int <- do.call(rbind, d.int) %>% 
+  dplyr::filter(delta < 2) %>% 
+  group_by(season) %>% 
+  mutate(mindf = min(df)) %>% 
+  ungroup() %>% 
+  mutate(pick = ifelse(df==mindf, 1, 0)) %>% 
+  dplyr::filter(pick==1) %>% 
+  arrange(season)
+
+dat.breed <- dat %>% dplyr::filter(season=="breed")
+m.breed <- glm(response ~ crop + grass + change + drought + drought:Region, family = "binomial", data=dat.breed, na.action = "na.fail")
+summary(m.breed)
+
+dat.fall <- dat %>% dplyr::filter(season=="fallmig")
+m.fall <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality + seasonality:Region + change + change:Region + drought + drought:Region, family = "binomial", data=dat.fall, na.action = "na.fail")
+summary(m.fall)
+
+dat.wint <- dat %>% dplyr::filter(season=="winter")
+m.wint <- glm(response ~ crop + crop:Region + seasonality + seasonality:Region, family = "binomial", data=dat.wint, na.action = "na.fail")
+summary(m.wint)
+
+dat.spring <- dat %>% dplyr::filter(season=="springmig")
+m.spring <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality + seasonality:Region, family = "binomial", data=dat.spring, na.action = "na.fail")
+summary(m.spring)
