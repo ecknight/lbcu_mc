@@ -1,8 +1,4 @@
-library(tidyverse)
-library(usdm)
-library(lme4)
-library(MuMIn)
-library(ggridges)
+
 
 options(scipen=99999)
 
@@ -121,6 +117,7 @@ loop <- dat %>%
 m.list <- list()
 s.list <- list()
 d.list <- list()
+f.list <- list()
 for(i in 1:nrow(loop)){
   
   #5. Subset data----
@@ -140,10 +137,14 @@ for(i in 1:nrow(loop)){
            cov = row.names(summary(m.list[[i]])$coefficients)) 
   
   #8. Dredge----
-  d.list[[i]] <- dredge(m.list[[i]]) %>% 
-    data.frame() %>% 
-    mutate(Region = loop$Region[i],
-           season = loop$season[i])
+  d.list[[i]] <- dredge(m.list[[i]])
+
+  
+  #9. Average models----
+  a.list <- model.avg(d.list[[i]], subset = delta < 2, revised.var=FALSE)
+  
+  #10. Use top model----
+  
   
 }
 
@@ -161,6 +162,9 @@ dredged <- do.call(rbind, d.list) %>%
   mutate(pick = ifelse(df==mindf, 1, 0)) %>% 
   dplyr::filter(pick==1) %>% 
   arrange(season, Region)
+
+#10. Run final models----
+
 
 #10. Visualize selection----
 #By pvalue
@@ -199,60 +203,82 @@ dat.avail <- dat %>%
 
 ma <- lm(seasonality ~ Region*season, data=dat.avail, na.action="na.fail")
 dredge(ma)
-plot(ma)
+
+ma <- lm(crop ~ Region*season, data=dat.avail, na.action="na.fail")
+dredge(ma)
+
+ma <- lm(change ~ Region*season, data=dat.avail, na.action="na.fail")
+dredge(ma)
+
+ma <- lm(drought ~ Region*season, data=dat.avail, na.action="na.fail")
+dredge(ma)
+
+ma <- lm(grass ~ Region*season, data=dat.avail, na.action="na.fail")
+dredge(ma)
 
 #12. Test for functional response across groups----
 
-#5. Subset data----
-seasons <- unique(dat$season)
+#12a. Crop----
+sum.crop <- summary %>% 
+  dplyr::filter(cov=="crop") %>% 
+  left_join(dat %>% 
+              group_by(season, Region) %>% 
+              summarize(avail = mean(crop)) %>% 
+              ungroup())
+m.crop <- lm(Estimate ~ log(avail), data=sum.crop)
+summary(m.crop)
 
-newdat <- 
+ggplot(sum.crop) +
+  geom_point(aes(x=log(avail), y=Estimate, colour=season))
 
-m.int <- list()
-s.int <- list()
-d.int <- list()
-for(i in 1:length(seasons)){
-  
-  dat.i <- dat %>% 
-    dplyr::filter(season==seasons[i]) %>% 
-    mutate(change2=change^2)
-  
-  m.int[[i]] <- glm(response ~ crop*Region + grass*Region + seasonality*Region + change*Region + drought*Region, family = "binomial", data=dat.i, na.action = "na.fail")
-  
-  # m.int[[i]] <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality + seasonality:Region + change + change:Region + drought + drought:Region, family = "binomial", data=dat.i, na.action = "na.fail")
-  
-  s.int[[i]] <- summary(m.int[[i]])$coefficients %>% 
-    data.frame() %>% 
-    mutate(season = seasons[i],
-           cov = row.names(summary(m.int[[i]])$coefficients)) 
-  
-  d.int[[i]] <- dredge(m.int[[i]]) %>% 
-    data.frame() %>% 
-    mutate(season = seasons[i])
-  
-}
+#12b. Drought----
+sum.drought <- summary %>% 
+  dplyr::filter(cov=="drought") %>% 
+  left_join(dat %>% 
+              group_by(season, Region) %>% 
+              summarize(avail = mean(drought)) %>% 
+              ungroup())
+m.drought <- lm(Estimate ~ log(avail), data=sum.drought)
+summary(m.drought)
 
-dredged.int <- do.call(rbind, d.int) %>% 
-  dplyr::filter(delta < 2) %>% 
-  group_by(season) %>% 
-  mutate(mindf = min(df)) %>% 
-  ungroup() %>% 
-  mutate(pick = ifelse(df==mindf, 1, 0)) %>% 
-  dplyr::filter(pick==1) %>% 
-  arrange(season)
+ggplot(sum.drought) +
+  geom_point(aes(x=log(avail), y=Estimate, colour=season))
 
-dat.breed <- dat %>% dplyr::filter(season=="breed")
-m.breed <- glm(response ~ crop + grass + change + drought + drought:Region, family = "binomial", data=dat.breed, na.action = "na.fail")
-summary(m.breed)
+#12c. Change----
+sum.change <- summary %>% 
+  dplyr::filter(cov=="change") %>% 
+  left_join(dat %>% 
+              group_by(season, Region) %>% 
+              summarize(avail = mean(change)) %>% 
+              ungroup())
+m.change <- lm(Estimate ~ log(avail), data=sum.change)
+summary(m.change)
 
-dat.fall <- dat %>% dplyr::filter(season=="fallmig")
-m.fall <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality + seasonality:Region + change + change:Region + drought + drought:Region, family = "binomial", data=dat.fall, na.action = "na.fail")
-summary(m.fall)
+ggplot(sum.change) +
+  geom_point(aes(x=log(avail), y=Estimate, colour=season))
 
-dat.wint <- dat %>% dplyr::filter(season=="winter")
-m.wint <- glm(response ~ crop + crop:Region + seasonality + seasonality:Region, family = "binomial", data=dat.wint, na.action = "na.fail")
-summary(m.wint)
+#12d. Grass----
+sum.grass <- summary %>% 
+  dplyr::filter(cov=="grass") %>% 
+  left_join(dat %>% 
+              group_by(season, Region) %>% 
+              summarize(avail = mean(grass)) %>% 
+              ungroup())
+m.grass <- lm(Estimate ~ log(avail), data=sum.grass)
+summary(m.grass)
 
-dat.spring <- dat %>% dplyr::filter(season=="springmig")
-m.spring <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality + seasonality:Region, family = "binomial", data=dat.spring, na.action = "na.fail")
-summary(m.spring)
+ggplot(sum.grass) +
+  geom_point(aes(x=log(avail), y=Estimate, colour=season, pch=Region))
+
+#12e. Seasonality----
+sum.seasonality <- summary %>% 
+  dplyr::filter(cov=="seasonality") %>% 
+  left_join(dat %>% 
+              group_by(season, Region) %>% 
+              summarize(avail = mean(seasonality)) %>% 
+              ungroup())
+m.seasonality <- lm(Estimate ~ log(avail), data=sum.seasonality)
+summary(m.seasonality)
+
+ggplot(sum.seasonality) +
+  geom_point(aes(x=log(avail), y=Estimate, colour=season, pch=Region))
