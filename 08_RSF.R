@@ -9,10 +9,13 @@ options(scipen=99999)
 
 #1. Load data----
 dat <- read.csv("Data/LBCU_environvars_RSF.csv") %>% 
-  mutate(response = ifelse(type=="used", 1, 0)) %>% 
-  mutate(change = (change - min(change))/(max(change) - min(change)),
-         drought = (drought - min(drought))/(max(drought) - min(drought)),
-         seasonality = (seasonality - min(seasonality))/(max(seasonality) - min(seasonality))) %>% 
+  mutate(response = ifelse(type=="used", 1, 0),
+         change.raw = change,
+         drought.raw = drought,
+         seasonality.raw = seasonality) %>% 
+  mutate(change = (change.raw - min(change.raw))/(max(change.raw) - min(change.raw)),
+         drought = (drought.raw - min(drought.raw))/(max(drought.raw) - min(drought.raw)),
+         seasonality = (seasonality.raw - min(seasonality.raw))/(max(seasonality.raw) - min(seasonality.raw))) %>% 
   mutate(Region = case_when(group==1 ~ "Central",
                             group==2 ~ "West",
                             group==3 ~ "East"),
@@ -20,46 +23,30 @@ dat <- read.csv("Data/LBCU_environvars_RSF.csv") %>%
 
 #2. Test VIF----
 loop <- dat %>% 
-  dplyr::select(Region, season) %>% 
+  dplyr::select(season) %>% 
   unique()
 
 v.list <- list()
 for(i in 1:nrow(loop)){
   
   cov.i <- dat %>% 
-    dplyr::filter(Region==loop$Region[i],
-                  season==loop$season[i]) %>% 
-    dplyr::select(change, crop, drought, grass, seasonality)
+    dplyr::filter(season==loop$season[i]) %>% 
+    dplyr::select(change, crop, grass, seasonality)
   
   v.list[[i]] <- vif(cov.i) %>% 
-    mutate(season=loop$season[i],
-           Region=loop$Region[i])
+    mutate(season=loop$season[i])
   
 }
 
 v <- do.call(rbind, v.list) %>% 
   arrange(-VIF)
-#spring mig for east population is only issue
-
-cor(dat %>% 
-      dplyr::filter(Region=="East",
-                    season=="springmig") %>% 
-      dplyr::select(built, change, crop, drought, grass, seasonality, wetland))
-#crop and grass is -0.61. Let's leave it
-
+#all good
 
 #3. Visualize----
 #Check for sufficient distribution
 #Check for polynomials
-ggplot(dat) +
-  geom_histogram(aes(x=built, colour=Region)) +
-  facet_wrap(Region~season, scales="free")
 
-ggplot(dat) +
-  geom_jitter(aes(x=built, y=response, colour=Region)) +
-  geom_smooth(aes(x=built, y=response, colour=Region)) +
-  facet_wrap(~season)
-
+#wetland change
 ggplot(dat) +
   geom_histogram(aes(x=change, colour=Region)) +
   facet_wrap(Region~season, scales="free")
@@ -70,6 +57,7 @@ ggplot(dat) +
   facet_wrap(~season)
 #maybe for winter
 
+#crop
 ggplot(dat) +
   geom_histogram(aes(x=crop, colour=Region)) +
   facet_wrap(Region~season, scales="free")
@@ -79,15 +67,7 @@ ggplot(dat) +
   geom_smooth(aes(x=crop, y=response, colour=Region)) +
   facet_wrap(~season)
 
-ggplot(dat) +
-  geom_histogram(aes(x=drought, colour=Region)) +
-  facet_wrap(Region~season, scales="free")
-
-ggplot(dat) +
-#  geom_jitter(aes(x=drought, y=response, colour=Region)) +
-  geom_smooth(aes(x=drought, y=response, colour=Region)) +
-  facet_wrap(~season)
-
+#grass
 ggplot(dat) +
   geom_histogram(aes(x=grass, colour=Region)) +
   facet_wrap(Region~season, scales="free")
@@ -97,6 +77,7 @@ ggplot(dat) +
   geom_smooth(aes(x=grass, y=response, colour=Region)) +
   facet_wrap(~season)
 
+#seasonality
 ggplot(dat) +
   geom_histogram(aes(x=seasonality, colour=Region)) +
   facet_wrap(Region~season, scales="free")
@@ -104,15 +85,6 @@ ggplot(dat) +
 ggplot(dat) +
 #  geom_jitter(aes(x=seasonality, y=response, colour=Region)) +
   geom_smooth(aes(x=seasonality, y=response, colour=Region)) +
-  facet_wrap(~season)
-
-ggplot(dat) +
-  geom_histogram(aes(x=wetland, colour=Region)) +
-  facet_wrap(Region~season, scales="free")
-
-ggplot(dat) +
-#  geom_jitter(aes(x=wetland, y=response, colour=Region)) +
-  geom_smooth(aes(x=wetland, y=response, colour=Region)) +
   facet_wrap(~season)
 
 #4. Set up loop----
@@ -152,168 +124,138 @@ summary <- do.call(rbind, s.list) %>%
 
 dredged <- do.call(rbind, d.list) %>% 
   dplyr::filter(delta < 2) %>%
-  group_by(season, Region) %>% 
+  group_by(season) %>% 
   mutate(mindf = min(df)) %>% 
-  ungroup() %>% 
   mutate(pick = ifelse(df==mindf, 1, 0)) %>% 
-  dplyr::filter(pick==1) %>% 
-  arrange(season, Region)
+  dplyr::filter(pick==1) %>%
+  arrange(df) %>% 
+  dplyr::filter(row_number()==1) %>% 
+  ungroup() %>% 
+  arrange(season)
 
-#10. Visualize selection----
-#By pvalue
-ggplot(summary %>% dplyr::filter(sig==1)) + 
-  geom_errorbar(aes(x=season, ymin=Estimate-se, ymax=Estimate+se, colour=Region),
-                position="dodge", width=1) +
-  #  geom_point(aes(x=season, y=Estimate, colour=Region), position = position_dodge(width=1)) +
-  geom_hline(aes(yintercept=0)) +
-  facet_wrap(~cov, scales="free_y")
+#10. Run final models----
 
-#By AIC
-dredged.plot <- dredged %>% 
-  pivot_longer(change:seasonality, names_to="cov", values_to = "intercept") %>% 
-  dplyr::filter(!is.na(intercept)) %>% 
-  left_join(summary)
+m.final <- list()
 
-ggplot(dredged.plot) + 
-  geom_errorbar(aes(x=season, ymin=Estimate-se, ymax=Estimate+se, colour=Region),
-                position="dodge", width=1) +
-  #  geom_point(aes(x=season, y=Estimate, colour=Region), position = position_dodge(width=1)) +
-  geom_hline(aes(yintercept=0)) +
-  facet_wrap(~cov, scales="free_y")
-
-#11. Visualize used & available----
-dat.long <- dat %>% 
-  dplyr::select(-built) %>% 
-  pivot_longer(change:wetland, names_to="cov", values_to="val")
-
-ggplot(dat.long %>% dplyr::filter(type=="avail")) +
-  geom_density_ridges(aes(x=val, fill=factor(Region), y=season), alpha = 0.5) +
-  facet_wrap(~cov, scales="free")
-
-#12. Test for differences in availability----
-dat.avail <- dat %>% 
-  dplyr::filter(response==0)
-
-ma <- lm(seasonality ~ Region*season, data=dat.avail, na.action="na.fail")
-dredge(ma)
-
-ma <- lm(crop ~ Region*season, data=dat.avail, na.action="na.fail")
-dredge(ma)
-
-ma <- lm(change ~ Region*season, data=dat.avail, na.action="na.fail")
-dredge(ma)
-
-ma <- lm(drought ~ Region*season, data=dat.avail, na.action="na.fail")
-dredge(ma)
-
-ma <- lm(grass ~ Region*season, data=dat.avail, na.action="na.fail")
-dredge(ma)
-
-#13. Test for functional response across groups----
-
-#13a. Crop----
-sum.crop <- summary %>% 
-  dplyr::filter(cov=="crop") %>% 
-  left_join(dat %>% 
-              group_by(season, Region) %>% 
-              summarize(avail = mean(crop)) %>% 
-              ungroup())
-m.crop <- lm(Estimate ~ log(avail), data=sum.crop)
-summary(m.crop)
-
-ggplot(sum.crop) +
-  geom_point(aes(x=log(avail), y=Estimate, colour=season))
-
-#13b. Drought----
-sum.drought <- summary %>% 
-  dplyr::filter(cov=="drought") %>% 
-  left_join(dat %>% 
-              group_by(season, Region) %>% 
-              summarize(avail = mean(drought)) %>% 
-              ungroup())
-m.drought <- lm(Estimate ~ log(avail), data=sum.drought)
-summary(m.drought)
-
-ggplot(sum.drought) +
-  geom_point(aes(x=log(avail), y=Estimate, colour=season))
-
-#13c. Change----
-sum.change <- summary %>% 
-  dplyr::filter(cov=="change") %>% 
-  left_join(dat %>% 
-              group_by(season, Region) %>% 
-              summarize(avail = mean(change)) %>% 
-              ungroup())
-m.change <- lm(Estimate ~ log(avail), data=sum.change)
-summary(m.change)
-
-ggplot(sum.change) +
-  geom_point(aes(x=log(avail), y=Estimate, colour=season))
-
-#13d. Grass----
-sum.grass <- summary %>% 
-  dplyr::filter(cov=="grass") %>% 
-  left_join(dat %>% 
-              group_by(season, Region) %>% 
-              summarize(avail = mean(grass)) %>% 
-              ungroup())
-m.grass <- lm(Estimate ~ log(avail), data=sum.grass)
-summary(m.grass)
-
-ggplot(sum.grass) +
-  geom_point(aes(x=log(avail), y=Estimate, colour=season, pch=Region))
-
-#13e. Seasonality----
-sum.seasonality <- summary %>% 
-  dplyr::filter(cov=="seasonality") %>% 
-  left_join(dat %>% 
-              group_by(season, Region) %>% 
-              summarize(avail = mean(seasonality)) %>% 
-              ungroup())
-m.seasonality <- lm(Estimate ~ log(avail), data=sum.seasonality)
-summary(m.seasonality)
-
-ggplot(sum.seasonality) +
-  geom_point(aes(x=log(avail), y=Estimate, colour=season, pch=Region))
-
-#14. Run final models----
 #breed
 dat.breed <- dat %>% 
   dplyr::filter(season=="breed")
 
-m.breed <- glm(response ~ crop + grass*Region + seasonality*Region + change*Region, family = "binomial", data=dat.breed, na.action = "na.fail")
-summary(m.breed)
+m.final[[1]] <- glm(response ~ crop + grass*Region + change*Region + seasonality*Region, family = "binomial", data=dat.breed, na.action = "na.fail")
 
 #fall
 dat.fall <- dat %>% 
   dplyr::filter(season=="fallmig")
 
-m.fall <- glm(response ~ crop*Region + grass, family = "binomial", data=dat.fall, na.action = "na.fail")
-summary(m.fall)
+m.final[[2]]  <- glm(response ~ crop*Region + grass, family = "binomial", data=dat.fall, na.action = "na.fail")
 
 #winter
 dat.winter <- dat %>% 
   dplyr::filter(season=="winter")
 
-m.winter <- glm(response ~ crop + grass*Region + seasonality*Region + change*Region, family = "binomial", data=dat.winter, na.action = "na.fail")
-summary(m.winter)
+m.final[[3]] <- glm(response ~ crop + grass*Region + change*Region + seasonality*Region, family = "binomial", data=dat.winter, na.action = "na.fail")
 
 #spring
 dat.spring <- dat %>% 
   dplyr::filter(season=="springmig")
 
-m.spring <- glm(response ~ crop*Region + seasonality*Region, family = "binomial", data=dat.spring, na.action = "na.fail")
-summary(m.spring)
+m.final[[4]]  <- glm(response ~ crop*Region + seasonality*Region, family = "binomial", data=dat.spring, na.action = "na.fail")
 
-#15. Predictions----
-newdat <- expand.grid(Region=unique(dat$Region), crop=seq(0, 1, 0.01), grass=mean(dat.spring$grass), seasonality=mean(dat.spring$seasonality), change=mean(dat.spring$change))
+#11. Predictions----
+loop <- unique(dat$season)
 
-pred.spring.crop <- data.frame(pred=predict(m.spring, newdat, se=TRUE)) %>% 
-  rename(pred=pred.fit, se=pred.se.fit) %>% 
-  dplyr::select(pred, se) %>% 
-  cbind(newdat) %>% 
-  mutate(up=pred+1.96*se, low=pred-1.96*se)
+pred.list <- list()
+for(i in 1:length(loop)){
+  
+  dat.i <- dat %>% 
+    dplyr::filter(season==loop[i])
+  
+  newdat.crop <- expand.grid(Region=unique(dat.spring$Region), crop=seq(0, 1, 0.01), grass=0, seasonality=0, change=0)
+  
+  newdat.grass <- expand.grid(Region=unique(dat.spring$Region), crop=0, grass=seq(0, 1, 0.01), seasonality=0, change=0)
+  
+  newdat.seasonality <- expand.grid(Region=unique(dat.spring$Region), crop=0, grass=0, seasonality=seq(0, 1, 0.01), change=0)
+  
+  newdat.change = expand.grid(Region=unique(dat.spring$Region), crop=0, grass=0, seasonality=0, change=seq(0, 1, 0.01))
+  
+  pred.crop <- predict(m.final[[i]], newdat.crop, se=TRUE, type="response")  %>% 
+    data.frame() %>% 
+    cbind(newdat.crop %>% 
+            dplyr::select(Region, crop)) %>% 
+    rename(val=crop) %>% 
+    mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
+           cov="crop")
+  
+  pred.grass <- predict(m.final[[i]], newdat.grass, se=TRUE, type="response")  %>% 
+    data.frame() %>% 
+    cbind(newdat.grass %>% 
+            dplyr::select(Region, grass)) %>% 
+    rename(val=grass) %>% 
+    mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
+           cov="grass")
+  
+  pred.seasonality <- predict(m.final[[i]], newdat.seasonality, se=TRUE, type="response")  %>% 
+    data.frame() %>% 
+    cbind(newdat.seasonality %>% 
+            dplyr::select(Region, seasonality)) %>% 
+    rename(val=seasonality) %>% 
+    mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
+           cov="seasonality")
+  
+  pred.change <- predict(m.final[[i]], newdat.change, se=TRUE, type="response")  %>% 
+    data.frame() %>% 
+    cbind(newdat.change %>% 
+            dplyr::select(Region, change)) %>% 
+    rename(val=change) %>% 
+    mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
+           cov="change")
+  
+  pred.list[[i]] <- rbind(pred.crop, pred.grass, pred.seasonality, pred.change) %>% 
+    mutate(season=loop[i])
+  
+}
 
-ggplot(pred.spring.crop) +
-  geom_ribbon(aes(x=crop, ymin=low, ymax=up, group=Region), alpha=0.2) +
-  geom_line(aes(x=crop, y=pred, colour=Region))
+pred <- do.call(rbind, pred.list) %>% 
+  dplyr::filter(!(season=="fallmig" & cov %in% c("change", "seasonality")),
+                !(season=="springmig" & cov %in% c("grass", "change")))
+
+write.csv(pred, "Results/RSFPredictions.csv", row.names = FALSE)
+
+
+#12. Plot----
+ggplot(pred) +
+  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=Region), alpha=0.3) +
+  geom_line(aes(x=val, y=fit, colour=Region)) +
+  facet_grid(cov~season, scales="free")
+
+#13. Coefficients----
+coef.breed <- data.frame(cov="crop",
+                         val=m.final[[1]]$coefficients[["crop"]],
+                         Region="All") %>% 
+ rbind(data.frame(cov=rep("grass", 3),
+                  val=c(m.final[[1]]$coefficients[["grass"]],
+                        m.final[[1]]$coefficients[["grass"]] + 
+                          m.final[[1]]$coefficients[["grass:RegionWest"]],
+                        m.final[[1]]$coefficients[["grass"]] + 
+                          m.final[[1]]$coefficients[["grass:RegionEast"]]),
+                  Region = c("Central", "West", "East"))) %>% 
+  rbind(data.frame(cov=rep("seasonality", 3),
+                   val=c(m.final[[1]]$coefficients[["seasonality"]],
+                         m.final[[1]]$coefficients[["seasonality"]] + 
+                           m.final[[1]]$coefficients[["RegionWest:seasonality"]],
+                         m.final[[1]]$coefficients[["seasonality"]] + 
+                           m.final[[1]]$coefficients[["RegionEast:seasonality"]]),
+                   Region = c("Central", "West", "East"))) %>% 
+  rbind(data.frame(cov=rep("change", 3),
+                   val=c(m.final[[1]]$coefficients[["change"]],
+                         m.final[[1]]$coefficients[["change"]] + 
+                           m.final[[1]]$coefficients[["RegionWest:change"]],
+                         m.final[[1]]$coefficients[["change"]] + 
+                           m.final[[1]]$coefficients[["RegionEast:change"]]),
+                   Region = c("Central", "West", "East"))) %>% 
+  mutate(season="Breed")
+
+#14. Plot----
+
+ggplot(coef.breed) +
+  geom_point(aes(x=cov, y=val, colour=Region))
