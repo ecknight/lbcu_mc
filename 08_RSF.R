@@ -227,35 +227,3 @@ ggplot(pred) +
   geom_ribbon(aes(x=val, ymin=low, ymax=up, group=Region), alpha=0.3) +
   geom_line(aes(x=val, y=fit, colour=Region)) +
   facet_grid(cov~season, scales="free")
-
-#13. Coefficients----
-coef.breed <- data.frame(cov="crop",
-                         val=m.final[[1]]$coefficients[["crop"]],
-                         Region="All") %>% 
- rbind(data.frame(cov=rep("grass", 3),
-                  val=c(m.final[[1]]$coefficients[["grass"]],
-                        m.final[[1]]$coefficients[["grass"]] + 
-                          m.final[[1]]$coefficients[["grass:RegionWest"]],
-                        m.final[[1]]$coefficients[["grass"]] + 
-                          m.final[[1]]$coefficients[["grass:RegionEast"]]),
-                  Region = c("Central", "West", "East"))) %>% 
-  rbind(data.frame(cov=rep("seasonality", 3),
-                   val=c(m.final[[1]]$coefficients[["seasonality"]],
-                         m.final[[1]]$coefficients[["seasonality"]] + 
-                           m.final[[1]]$coefficients[["RegionWest:seasonality"]],
-                         m.final[[1]]$coefficients[["seasonality"]] + 
-                           m.final[[1]]$coefficients[["RegionEast:seasonality"]]),
-                   Region = c("Central", "West", "East"))) %>% 
-  rbind(data.frame(cov=rep("change", 3),
-                   val=c(m.final[[1]]$coefficients[["change"]],
-                         m.final[[1]]$coefficients[["change"]] + 
-                           m.final[[1]]$coefficients[["RegionWest:change"]],
-                         m.final[[1]]$coefficients[["change"]] + 
-                           m.final[[1]]$coefficients[["RegionEast:change"]]),
-                   Region = c("Central", "West", "East"))) %>% 
-  mutate(season="Breed")
-
-#14. Plot----
-
-ggplot(coef.breed) +
-  geom_point(aes(x=cov, y=val, colour=Region))
