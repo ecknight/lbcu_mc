@@ -223,8 +223,8 @@ pred <- do.call(rbind, pred.list) %>%
   mutate(Region = ifelse((season=="breed" & cov %in% c("crop", "grass")) |
                            (season=="fallmig" & cov=="grass") |
                            (season=="springmig" & cov=="seasonality"),
-                         "No regional\ndifference",
-                         Region)) %>% 
+                         "No group\ndifference",
+                         as.character(Region))) %>% 
   mutate(val.use = case_when(cov=="change" ~ val*(max(dat$change.raw)-min(dat$change.raw)) + min(dat$change.raw),
                          cov=="seasonality" ~ val*(max(dat$seasonality.raw)-min(dat$seasonality.raw)) + min(dat$seasonality.raw),
                          !is.na(val) ~ val))
