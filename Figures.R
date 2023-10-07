@@ -404,7 +404,7 @@ plot.dep <- ggplot(dat %>% dplyr::filter(var=="depart")) +
   xlab("Day of migration departure season") +
   ylab("") +
   scale_x_continuous(breaks=c(32, 91, 152, 213), labels=c("Feb", "Apr", "Jun", "Aug")) +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(legend.position = "none")
 plot.dep
 
@@ -415,7 +415,7 @@ plot.arr <- ggplot(dat %>% dplyr::filter(var=="arrive")) +
   xlab("Day of migration arrival season") +
   ylab("") +
   scale_x_continuous(breaks=c(91, 152, 213, 274), labels=c("Apr", "Jun", "Aug", "Oct")) +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.arr
@@ -426,7 +426,7 @@ plot.dur <- ggplot(dat %>% dplyr::filter(var=="duration")) +
   my.theme +
   xlab("Days of migration") +
   ylab("") +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.dur
@@ -437,7 +437,7 @@ plot.dist <- ggplot(dat %>% dplyr::filter(var=="dist")) +
   my.theme +
   xlab("Migration distance (km)") +
   ylab("") +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.dist
@@ -448,7 +448,7 @@ plot.rate <- ggplot(dat %>% dplyr::filter(var=="rate")) +
   my.theme +
   xlab("Migration rate (km/day)") +
   ylab("") +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(legend.position = "none")
 plot.rate
 
@@ -458,7 +458,7 @@ plot.stop <- ggplot(dat %>% dplyr::filter(var=="Stopovers")) +
   my.theme +
   xlab("Number of migration stopovers") +
   ylab("") +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.stop
@@ -469,7 +469,7 @@ plot.stopdur <- ggplot(dat %>% dplyr::filter(var=="stopoverduration")) +
   my.theme +
   xlab("Total days of migration stopover") +
   ylab("") +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.stopdur
@@ -480,7 +480,7 @@ plot.wint <- ggplot(dat %>% dplyr::filter(var=="WinterHRs")) +
   my.theme +
   xlab("Number of wintering home ranges") +
   ylab("") +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank()) +
   scale_x_continuous(breaks=c(1,2,3), labels=c(1,2,3)) +
@@ -493,14 +493,14 @@ plot.hr <- ggplot(dat %>% dplyr::filter(var=="HRarea")) +
   my.theme +
   xlab("Natural log of use area") +
   ylab("") +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(legend.position = "none")
 plot.hr
 
 #5j. Legend----
 plot.legend <- ggplot(dat) +
   geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, stat="binline", scale=1) +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,5,1)]) +
   theme(legend.position = "right")
 plot.legend
 legend <- cowplot::get_legend(plot.legend)
@@ -514,89 +514,36 @@ plot.behav <- grid.arrange(plot.dep, plot.arr, plot.dur, plot.dist, plot.rate, p
 
 ggsave(plot.behav, filename="Figs/Fig5Behave.jpeg", width = 12, height = 9)
 
-#6. Environmental attributes----
+#6. Habitat selection----
 
-#6a. Wrangle mrpp deltas----
-mrpp <- read.csv("Data/MRPP.csv") %>% 
-  group_by(season, region) %>% 
-  summarize(delta.mn = mean(delta),
-            delta.sd = sd(delta),
-            delta.up = quantile(delta, 0.975),
-            delta.lw = quantile(delta, 0.025)) %>% 
-  ungroup()
+#6a. Read in predictions----
+pred <- read.csv("Results/RSFPredictions.csv")
 
-mrpp$region <- factor(mrpp$region, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
-mrpp$season <- factor(mrpp$season, levels=c("breed", "fallmig", "winter", "springmig"),
-                      labels=c("Breeding home range", "Postbreeding migration\nstopover", "Nonbreeding home range", "Prebreeding migration\nstopover"))
+#6b. Set factor levels----
+pred$Region <- factor(pred$Region,
+                      levels=c("West", "Central", "East", "No group\ndifference"),
+                      labels=c("West group", "Central group", "East group", "No group\ndifference"))
+pred$season <- factor(pred$season,
+                      levels=c("breed", "fallmig", "winter", "springmig"),
+                      labels=c("Breeding\nhome range", "Postbreeding\nmigration stopover", "Nonbreeding\nhome range", "Prebreeding\nmigration stopover"))
+pred$cov <- factor(pred$cov,
+                   levels=c("seasonality", "change", "crop", "grass"),
+                   labels=c("Water seasonality", "Water change", "Proportion cropland", "Proportion grassland"))
 
-#6b. Wrangle nmds scores----
-scores <- read.csv("Data/NMDSScores.csv") %>% 
-  group_by(season, boot) %>% 
-  mutate(id = row_number()) %>% 
-  ungroup() %>% 
-  group_by(season, region, id) %>% 
-  summarize(x.mn = mean(NMDS1),
-            x.up = quantile(NMDS1, 0.975),
-            x.lw = quantile(NMDS1, 0.025),
-            y.mn = mean(NMDS2),
-            y.up = quantile(NMDS2, 0.975),
-            y.lw = quantile(NMDS2, 0.025)) %>% 
-  ungroup() %>% 
-  dplyr::filter(!(season=="winter" & id==1))
-
-scores$region <- factor(scores$region, levels=c("west", "central", "east"), labels=c("West", "Central", "East"))
-scores$season <- factor(scores$season, levels=c("breed", "fallmig", "winter", "springmig"),
-                        labels=c("Breeding home range", "Postbreeding migration\nstopover", "Nonbreeding home range", "Prebreeding migration\nstopover"))
-
-covscores <- read.csv("Data/NMDSCovscores.csv") %>% 
-  group_by(season, cov) %>% 
-  summarize(x.mn = mean(NMDS1),
-            x.up = quantile(NMDS1, 0.975),
-            x.lw = quantile(NMDS1, 0.025),
-            y.mn = mean(NMDS2),
-            y.up = quantile(NMDS2, 0.975),
-            y.lw = quantile(NMDS2, 0.025)) %>% 
-  ungroup()
-
-covscores$season <- factor(covscores$season, levels=c("breed", "fallmig", "winter", "springmig"),
-                      labels=c("Breeding home range", "Postbreeding migration\nstopover", "Nonbreeding home range", "Prebreeding migration\nstopover"))
-covscores$cov <- factor(covscores$cov, levels=c("flooded_vegetation", "seasonality", "recurrence", "change_norm", "grass", "conv", "crops", "built", "pdsi"),
-                       labels=c("Wetland", "Water\nseasonality", "Water\nrecurrence", "Water\nchange", "Grassland", "Grassland\nconversion", "Crop", "Urban", "Drought"))
-
-#6c. Plot----
-plot.mrpp <- ggplot(mrpp) +
-  geom_errorbar(aes(x=region, ymin=delta.lw, ymax=delta.up, colour=region)) +
-  geom_point(aes(x=region, y=delta.mn, colour=region)) +
-  facet_grid(season~.) +
-  scale_colour_manual(values=groups) +
+#6b. Plot----
+plot.covs <- ggplot(pred) +
+  geom_ribbon(aes(x=val.use, ymin=low, ymax=up, group=Region), alpha=0.3) +
+  geom_line(aes(x=val.use, y=fit, colour=Region)) +
+  facet_grid(season~cov, scales="free") +
   my.theme +
-  theme(legend.position = "none",
-        axis.title.x = element_blank(),
-        strip.text = element_blank(),
-        strip.background = element_blank()) + 
-  ylab("Within-group MRPP mean")
-#plot.mrpp
+  scale_colour_manual(values=c(groups[c(3, 5, 1)], "grey90"), name="") +
+  xlab("Attribute value") +
+  ylab("Marginal relative probability of use") +
+  theme(axis.text.x = element_text(size=9),
+        axis.text.y = element_text(size=9))
+plot.covs
 
-plot.nmds <- ggplot() +
-  geom_point(data=scores, aes(x=x.mn, y=y.mn, fill=region), pch=21, size=2) +
-  geom_segment(data=covscores, aes(x=0, y=0, xend=x.mn, yend=y.mn, colour=cov), arrow = arrow(length = unit(0.2, "cm"))) +
-  facet_wrap(.~season, scales="free", ncol=1, strip.position = "right") +
-  scale_fill_manual(values=groups, name="Group") +
-  scale_colour_paletteer_d("ggthemes_ptol::qualitative", 9, direction=1, name="Environmental\nattribute") +
-  my.theme + 
-  ylab("") +
-  xlab("") +
-  theme(axis.text.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks = element_blank(),
-        axis.line.x = element_blank(),
-        axis.line.y = element_blank())
-#plot.nmds
-
-plot.covs <- grid.arrange(plot.mrpp, plot.nmds, widths = c(2, 3), heights =c(4),
-             layout_matrix=rbind(c(1,2)))
-
-ggsave(plot.covs, filename="Figs/Fig6NMDSMRPP.jpeg", width = 8, height=10)
+ggsave(plot.covs, filename="Figs/Fig6RSF.jpeg", width = 10, height=8)
 
 
 #8. SUMMARY STATS####
