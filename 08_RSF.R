@@ -102,7 +102,7 @@ for(i in 1:nrow(loop)){
     dplyr::filter(season==loop$season[i])
   
   #6. Model----
-  m.list[[i]] <- glm(response ~ crop*Region + grass*Region + seasonality*Region + change*Region, family = "binomial", data=dat.i, na.action = "na.fail")
+  m.list[[i]] <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality + seasonality:Region + change + change:Region, family = "binomial", data=dat.i, na.action = "na.fail")
   
   #7. Save summary----
   s.list[[i]] <- summary(m.list[[i]])$coefficients %>% 
@@ -141,25 +141,25 @@ m.final <- list()
 dat.breed <- dat %>% 
   dplyr::filter(season=="breed")
 
-m.final[[1]] <- glm(response ~ crop + grass*Region + change*Region + seasonality*Region, family = "binomial", data=dat.breed, na.action = "na.fail")
+m.final[[1]] <- glm(response ~ crop + grass + change + change:Region, family = "binomial", data=dat.breed, na.action = "na.fail")
 
 #fall
 dat.fall <- dat %>% 
   dplyr::filter(season=="fallmig")
 
-m.final[[2]]  <- glm(response ~ crop*Region + grass, family = "binomial", data=dat.fall, na.action = "na.fail")
+m.final[[2]]  <- glm(response ~ crop + crop:Region + grass + change + change:Region, family = "binomial", data=dat.fall, na.action = "na.fail")
 
 #winter
 dat.winter <- dat %>% 
   dplyr::filter(season=="winter")
 
-m.final[[3]] <- glm(response ~ crop + grass*Region + change*Region + seasonality*Region, family = "binomial", data=dat.winter, na.action = "na.fail")
+m.final[[3]] <- glm(response ~ crop + crop:Region + seasonality + seasonality:Region, family = "binomial", data=dat.winter, na.action = "na.fail")
 
 #spring
 dat.spring <- dat %>% 
   dplyr::filter(season=="springmig")
 
-m.final[[4]]  <- glm(response ~ crop*Region + seasonality*Region, family = "binomial", data=dat.spring, na.action = "na.fail")
+m.final[[4]]  <- glm(response ~ crop + crop:Region + grass + grass:Region + seasonality, family = "binomial", data=dat.spring, na.action = "na.fail")
 
 #11. Predictions----
 loop <- unique(dat$season)
@@ -216,14 +216,25 @@ for(i in 1:length(loop)){
 }
 
 pred <- do.call(rbind, pred.list) %>% 
-  dplyr::filter(!(season=="fallmig" & cov %in% c("change", "seasonality")),
-                !(season=="springmig" & cov %in% c("grass", "change")))
+  dplyr::filter(!(season=="breed" & cov %in% c("seasonality")),
+                !(season=="fallmig" & cov %in% c("seasonality")),
+                !(season=="springmig" & cov %in% c("change")),
+                !(season=="winter" & cov %in% c("change", "grass"))) %>% 
+  mutate(Region = ifelse((season=="breed" & cov %in% c("crop", "grass")) |
+                           (season=="fallmig" & cov=="grass") |
+                           (season=="springmig" & cov=="seasonality"),
+                         "No regional\ndifference",
+                         Region)) %>% 
+  mutate(val.use = case_when(cov=="change" ~ val*(max(dat$change.raw)-min(dat$change.raw)) + min(dat$change.raw),
+                         cov=="seasonality" ~ val*(max(dat$seasonality.raw)-min(dat$seasonality.raw)) + min(dat$seasonality.raw),
+                         !is.na(val) ~ val))
 
 write.csv(pred, "Results/RSFPredictions.csv", row.names = FALSE)
 
 
 #12. Plot----
 ggplot(pred) +
-  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=Region), alpha=0.3) +
-  geom_line(aes(x=val, y=fit, colour=Region)) +
+  geom_ribbon(aes(x=val.use, ymin=low, ymax=up, group=Region), alpha=0.3) +
+  geom_line(aes(x=val.use, y=fit, colour=Region)) +
   facet_grid(cov~season, scales="free")
+
