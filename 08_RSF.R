@@ -123,15 +123,24 @@ summary <- do.call(rbind, s.list) %>%
   mutate(sig = ifelse(p < 0.05, 1, 0))
 
 dredged <- do.call(rbind, d.list) %>% 
-  dplyr::filter(delta < 2) %>%
-  group_by(season) %>% 
-  mutate(mindf = min(df)) %>% 
-  mutate(pick = ifelse(df==mindf, 1, 0)) %>% 
-  dplyr::filter(pick==1) %>%
-  arrange(df) %>% 
-  dplyr::filter(row_number()==1) %>% 
+  mutate(delta2 = ifelse(delta < 2, 1, 0)) %>% 
+  group_by(season, delta2) %>% 
+  mutate(mindf = min(df),
+         pick = ifelse(df==mindf & delta2==1, 1, 0)) %>% 
   ungroup() %>% 
-  arrange(season)
+  mutate(weight = round(weight, 2),
+         logLik = round(logLik, 2),
+         AICc = round(AICc, 2),
+         delta = round(delta, 2))
+
+dredged.pick <- dredged %>% 
+  dplyr::filter(pick==1) %>% 
+  arrange(season, df) %>% 
+  group_by(season) %>% 
+  dplyr::filter(row_number()==1) %>% 
+  ungroup()
+
+write.csv(dredged, "Results/RSFAIC.csv", row.names = FALSE)
 
 #10. Run final models----
 
