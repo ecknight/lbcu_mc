@@ -52,23 +52,36 @@ lake <- map_data("lakes")
 seasons <- paletteer_d("nord::victory_bonds", n=4) 
 seasons
 
-groups <- viridis_pal(option="viridis")(n=5)
+# groups <- c(viridis_pal(option="D")(5)[1:4], "#d4be02")
+# groups <- c(viridis_pal(option="E")(5))
+groups <- palette.colors(palette = "Dark 2")[c(1:3, 6, 4)]
+
+ggplot() + 
+  geom_point(aes(x=c(1:length(groups)), y=c(1:length(groups)), colour=factor(c(1:length(groups)))), size=5, show.legend=FALSE) +
+  scale_colour_manual(values=as.character(groups))
 
 #1. Figure 1: Study area figure----
-#Get data and wrangle for deployment locations----
-dep <- read.csv("/Users/ellyknight/Documents/SMBC/Analysis/lbcu_exploration/Data/LBCUCleanedData.csv") %>% 
-  group_by(id) %>% 
+#Get data and wrangle for first location per tag
+dat <- read.csv("/Users/ellyknight/Documents/SMBC/Analysis/lbcu_exploration/Data/LBCUCleanedData.csv") %>% 
+  group_by(study, id) %>% 
   dplyr::filter(row_number()==1) %>% 
   ungroup()
-
-#make up study IDs
-study <- data.frame(study = unique(dep$study)) %>% 
+  
+#Get study ids
+study <- data.frame(study = unique(dat$study)) %>% 
   arrange(study) %>% 
-  mutate(studyid = c(6,4,9,7,2,3,5,1,8)) %>% 
-  left_join(dep) %>% 
-  mutate(longr = round(long/2)*2,
-         latr = round(lat/2)*2) %>% 
-  group_by(study, studyid, longr, latr) %>% 
+  mutate(studyid = c(6,4,9,7,2,3,5,1,8))
+
+#Get deployment data and match to nearest location for sample size per deployment location
+dep <- dat %>% 
+  mutate(deprow = dat %>% 
+           st_as_sf(coords=c("long", "lat"), crs=4326) %>% 
+           st_nearest_feature(read.csv("Data/DeploymentLocations.csv") %>% 
+                                st_as_sf(coords=c("long", "lat"), crs=4326))) %>% 
+  dplyr::select(-long, -lat) %>% 
+  left_join(read.csv("Data/DeploymentLocations.csv") %>% 
+              mutate(deprow = row_number())) %>% 
+  group_by(studyid, long, lat) %>% 
   summarize(n=n()) %>% 
   ungroup()
 
@@ -102,7 +115,7 @@ plot.sa <- ggplot() +
   geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
   coord_sf(xlim=c(-129, -75), ylim=c(15, 57), expand = FALSE, crs=4326) +
   geom_tile(data = range.pt, aes(x = x, y = y, fill=season), alpha = 0.7) +
-  geom_jitter(data=study, aes(x=longr, y=latr, size=n), pch=21, colour="grey90", fill="grey10", alpha = 0.7, width=1, height=1) +
+  geom_point(data=dep, aes(x=long, y=lat, size=n), pch=21, colour="grey90", fill="grey30", alpha = 0.7) +
   xlab("") +
   ylab("") +
   map.theme +
@@ -140,52 +153,52 @@ loc.fall <- loc %>%
   mutate(plot=paste0(id, "-", year))
 
 #define migratory divides
-div <- data.frame(div=rep(c("1-2", "2-3", "3-4"), 2),
-         type=c(rep("start", 3), rep("end", 3)),
-         lat = c(55, 52, 54,
-                 32, 22, 18),
-         lon = c(-118, -113.2, -111,
-                 -118, -111.2, -97),
-         season = rep("season", 6))
+div <- data.frame(div=rep(c("1-2", "2-3", "3-4", "4-5"), 2),
+         type=c(rep("start", 4), rep("end", 4)),
+         lat = c(55, 52, 54, 53,
+                 32, 22, 18, 28),
+         lon = c(-118, -113.2, -111, -104,
+                 -118, -111.2, -97, -91),
+         season = rep("season", 8))
 
 #plot spring
 plot.spring <- ggplot() +
-  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
-  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
-  coord_sf(xlim=c(-129, -75), ylim=c(15, 57), expand = FALSE, crs=4326) +
-  geom_line(data=loc.spring, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.4) +
+  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", size=0.3) +
+  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", size=0.3) +
+  coord_sf(xlim=c(-129, -75), ylim=c(14.6, 57), expand = FALSE, crs=4326) +
+  geom_line(data=loc.spring, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.2) +
   geom_point(data=loc.spring, aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
-  xlab("") +
-  ylab("") +
   map.theme +
   geom_line(data=div, aes(x=lon, y=lat, group=div), linetype="dashed", size=1) +
   ggtitle("Prebreeding migration") +
-  scale_fill_manual(values=as.character(seasons[c(4,3,1)]))
-#plot.spring
+  scale_fill_manual(values=as.character(seasons[c(4,3,1)])) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+plot.spring
 
 #plot fall
 plot.fall <- ggplot() +
-  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
-  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
-  coord_sf(xlim=c(-129, -75), ylim=c(15, 57), expand = FALSE, crs=4326) +
-  geom_line(data=loc.fall, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.4) +
+  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", size=0.3) +
+  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", size=0.3) +
+  coord_sf(xlim=c(-129, -75), ylim=c(14.6, 57), expand = FALSE, crs=4326) +
+  geom_line(data=loc.fall, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.2) +
   geom_point(data=loc.fall, aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
-  xlab("") +
-  ylab("") +
   map.theme +
   geom_line(data=div, aes(x=lon, y=lat, group=div), linetype="dashed", size=1) +
   ggtitle("Postbreeding migration")  +
-  scale_fill_manual(values=as.character(seasons[c(4,1,3)]))
-#plot.fall
+  scale_fill_manual(values=as.character(seasons[c(4,1,3)])) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+plot.fall
 
 #make legend
 plot.legend <- ggplot() +
-  geom_point(data=sample_n(loc.fall, 10), aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
+  geom_point(data=sample_n(loc.fall, 100), aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
   geom_line(data=div, aes(x=lon, y=lat, group=div, linetype=season), size=1) +
   scale_fill_manual(values=as.character(seasons[c(4,1,3)]), name="Season", labels=c("Stationary\nnonbreeding",  "Breeding", "Migration\nstopover")) + 
   scale_linetype_manual(values=c("dashed"), labels=c("Hypothesized\nmigratory divide"), name="") +
   theme(legend.position = "bottom")
-#plot.legend
+plot.legend
 legend <- cowplot::get_legend(plot.legend)
 
 #put together and save
@@ -193,7 +206,7 @@ ggsave(grid.arrange(plot.spring, plot.fall, legend,
                     heights = c(4,1),
                     widths = c(4,4),
                     layout_matrix = rbind(c(1,2),
-                                          c(3,3))), filename="Figs/Fig2Tracks.jpeg", width=8, height=6)
+                                          c(3,3))), filename="Figs/Fig2Tracks.jpeg", width=8, height=5)
 
 #3. Figure 3: Clustering figure----
 
@@ -228,11 +241,9 @@ clust.ll$season <- factor(clust.ll$season, levels=c("breed", "fallmig", "winter"
 clust.ll$nclust <- factor(clust.ll$nclust, levels=c("2", "3", "4", "5"), labels=c("2 groups", "3 groups", "4 groups", "5 groups"))
   
 #3b. Clustering plot----
-groups <- viridis_pal(option="viridis")(n=5)
-
 plot.clust <- ggplot(clust.ll) +
-  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
-  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
+  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", size=0.3) +
+  # geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "gray70", size=0.3) +
   geom_point(aes(x=lon, y=lat, fill=factor(group)), size = 3, pch=21, colour="grey90", alpha=0.7) +
   coord_sf(xlim=c(min(clust.ll$lon)-5, max(clust.ll$lon)+5), ylim = c(min(clust.ll$lat)-5, max(clust.ll$lat)+5), expand = FALSE, crs=4326) +
   facet_grid(season ~ nclust) +
@@ -240,7 +251,7 @@ plot.clust <- ggplot(clust.ll) +
   ylab("") +
   map.theme +
   theme(legend.position = "bottom") +
-  scale_fill_manual(values=groups[c(5,3,1,4,2)], name="Group") +
+  scale_fill_manual(values=groups, name="Group") +
   guides(fill=guide_legend(nrow=1,byrow=TRUE)) +
   theme(panel.spacing = unit(0.2, "lines"))
 plot.clust
@@ -294,36 +305,36 @@ trend.list <- read.csv("Data/LBCU_trend_gamye.csv") %>%
   rename(lat = Y, lon = X) %>% 
   cbind(read.csv("Data/LBCU_trend_gamye.csv")) %>% 
   rename(group = knncluster) %>% 
-  mutate(Region = case_when(group==1 ~ "Central",
+  mutate(Region = case_when(group==1 ~ "Intermountain",
                             group==2 ~ "West",
-                            group==3 ~ "East"))
+                            group==3 ~ "Plains"))
 
 trend <- trend.list %>% 
   dplyr::select(Region, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
   unique() %>% 
   rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025')
 
-trend$Region <- factor(trend$Region, levels=c("West", "Central", "East"))
+trend$Region <- factor(trend$Region, levels=c("West", "Intermountain", "Plains"))
 
 #4b. BBS Regions----
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>% 
   dplyr::filter(season=="breed", nclust==3) %>% 
   dplyr::select(id, group, lat, lon) %>% 
   unique()  %>% 
-  mutate(Region = case_when(group==1 ~ "Central",
+  mutate(Region = case_when(group==1 ~ "Intermountain",
                             group==2 ~ "West",
-                            group==3 ~ "East")) %>% 
+                            group==3 ~ "Plains")) %>% 
   left_join(trend %>% 
               dplyr::select(Region, Trend) %>% 
               unique())
 
 plot.map <- ggplot(trend.list) +
-  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
-  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
+  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", size=0.3) +
+  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "gray70", size=0.3) +
   geom_point(aes(x=lon, y=lat, colour=factor(Trend)), pch=21, fill="white", size=1.5) +
   geom_point(data=clust, aes(x=lon, y=lat, fill=factor(Trend)), colour="grey90", pch=21,  size=3, alpha = 0.7) +
-  scale_colour_manual(values=groups[c(1,3,5)]) +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_colour_manual(values=groups[c(3,2,1)]) +
+  scale_fill_manual(values=groups[c(3,2,1)]) +
   coord_sf(xlim=c(min(trend.list$lon)-5, max(trend.list$lon)+5), ylim = c(min(trend.list$lat)-5, max(trend.list$lat)+5), expand = FALSE, crs=3857) +
   map.theme +
   xlab("") +
@@ -338,35 +349,38 @@ plot.bar <- ggplot(trend) +
   geom_hline(aes(yintercept=0), linetype="dashed", colour="grey30") +
   geom_errorbar(aes(x=Region, ymin=down, ymax=up)) +
   geom_point(aes(x=Region, y=Trend, fill=factor(Trend)), size=4, pch=21) +
-  scale_fill_manual(values=groups[c(1,3,5)]) +
+  scale_fill_manual(values=groups[c(3,2,1)]) +
   ylab("Population trend") +
   my.theme +
+  xlab("") +
   theme(legend.position="none",
         strip.background = element_blank(),
-        strip.text.x = element_blank())
+        strip.text.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
 #  geom_text(aes(x=3.4, y=4.4, label="B"), size=10)
 plot.bar
 
 #4d. Trajectories----
 indices <- read.csv("Data/LBCU_indices_gamye.csv") %>% 
-  mutate(Region = case_when(Region==1 ~ "Central",
+  mutate(Region = case_when(Region==1 ~ "Intermountain",
                             Region==2 ~ "West",
-                            Region==3 ~ "East")) %>% 
+                            Region==3 ~ "Plains")) %>% 
   left_join(trend %>% 
               dplyr::select(Region, Trend) %>% 
               unique())
 
 plot.index <- ggplot(indices) +
-  geom_ribbon(aes(x=Year, ymin=Index_q_0.025, ymax=Index_q_0.975, group=factor(Region)), alpha = 0.2) +
+  geom_ribbon(aes(x=Year, ymin=Index_q_0.025, ymax=Index_q_0.975, group=factor(Region)), fill="grey30", alpha = 0.1) +
   geom_line(aes(x=Year, y=Index, group=Region, colour=factor(Trend)), size=1) +
   geom_vline(aes(xintercept = 2007), linetype = "dashed") +
-  scale_colour_manual(values=groups[c(1,3,5)], name="Population\ntrend") +
+  scale_colour_manual(values=groups[c(3,2,1)], name="Population\ntrend") +
   ylab("Relative abundance index") +
   my.theme +
   theme(legend.position="none",
         strip.background = element_blank(),
         strip.text.x = element_blank(),
-        plot.margin = margin(t=,1, r = 5))
+        plot.margin = margin(t=1, r = 10))
 #  geom_text(aes(x=2020, y=7.9, label="C"), size=10)
 plot.index
 
@@ -374,7 +388,7 @@ plot.index
 plot.legend <- ggplot(indices) +
   geom_point(data=trend.list, aes(x=lon, y=lat, colour=factor(Trend))) +
   geom_line(aes(x=Year, y=Index, group=Region, colour=factor(Trend))) +
-  scale_colour_manual(values=groups[c(3,5,1)], name="Group", labels=c("West", "Central", "East")) +
+  scale_colour_manual(values=groups[c(2,1,3)], name="Group", labels=c("West", "Intermountain", "Plains")) +
   ylab("Relative abundance index") + 
   theme(legend.position = "bottom")
 
@@ -395,92 +409,92 @@ ggsave(grid.arrange(plot.map, plot.bar, plot.index, legend,
 dat <- read.csv("Data/MovementBehaviours.csv")
 dat$season <- factor(dat$season, levels=c("springmig", "winter", "fallmig", "breed"),
                      labels=c("Prebreeding\nmigration", "Nonbreeding", "Postbreeding\nmigration",  "Breeding"))
-dat$Group <- factor(dat$region, levels=c("West", "Central", "East"))
+dat$Group <- factor(dat$region, levels=c("West", "Central", "East"), labels=c("West", "Intermountain", "Plains"))
 
 #5b. Departure----
 plot.dep <- ggplot(dat %>% dplyr::filter(var=="depart")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Day of migration departure season") +
   ylab("") +
   scale_x_continuous(breaks=c(32, 91, 152, 213), labels=c("Feb", "Apr", "Jun", "Aug")) +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(legend.position = "none")
 plot.dep
 
 #5c. Arrival----
 plot.arr <- ggplot(dat %>% dplyr::filter(var=="arrive")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Day of migration arrival season") +
   ylab("") +
   scale_x_continuous(breaks=c(91, 152, 213, 274), labels=c("Apr", "Jun", "Aug", "Oct")) +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.arr
 
 #5d. Duration----
 plot.dur <- ggplot(dat %>% dplyr::filter(var=="duration")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Days of migration") +
   ylab("") +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.dur
 
 #5e. Distance----
 plot.dist <- ggplot(dat %>% dplyr::filter(var=="dist")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
+  geom_density_ridges(aes(x=val/100, y=season, fill=Group), alpha = 0.5, scale=1) + 
   my.theme +
-  xlab("Migration distance (km)") +
+  xlab("Migration distance (100 km)") +
   ylab("") +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.dist
 
 #5f. Rate----
 plot.rate <- ggplot(dat %>% dplyr::filter(var=="rate")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
+  geom_density_ridges(aes(x=val/100, y=season, fill=Group), alpha = 0.5, scale=1) + 
   my.theme +
-  xlab("Migration rate (km/day)") +
+  xlab("Migration rate (100 km/day)") +
   ylab("") +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(legend.position = "none")
 plot.rate
 
 #5g. Stopovers----
 plot.stop <- ggplot(dat %>% dplyr::filter(var=="Stopovers")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, stat="binline", position=position_dodge(width=1), scale=1) + 
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, stat="binline", position=position_dodge(width=1), scale=1) + 
   my.theme +
   xlab("Number of migration stopovers") +
   ylab("") +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.stop
 
 #5h. Stopover duration----
 plot.stopdur <- ggplot(dat %>% dplyr::filter(var=="stopoverduration")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, scale=1) + 
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Total days of migration stopover") +
   ylab("") +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
   theme(legend.position = "none")
 plot.stopdur
 
 #5i. Number of wintering ranges----
 plot.wint <- ggplot(dat %>% dplyr::filter(var=="WinterHRs")) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, stat="binline", position=position_dodge(width=0.2), scale=1) + 
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, stat="binline", position=position_dodge(width=0.2), scale=1) + 
   my.theme +
   xlab("Number of wintering home ranges") +
   ylab("") +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank()) +
   scale_x_continuous(breaks=c(1,2,3), labels=c(1,2,3)) +
@@ -489,18 +503,18 @@ plot.wint
 
 #5j. Range area----
 plot.hr <- ggplot(dat %>% dplyr::filter(var=="HRarea")) +
-  geom_density_ridges(aes(x=log(val), y=season, fill=Group), alpha = 0.4, scale=1) + 
+  geom_density_ridges(aes(x=log(val), y=season, fill=Group), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Natural log of use area") +
   ylab("") +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(legend.position = "none")
 plot.hr
 
 #5j. Legend----
 plot.legend <- ggplot(dat) +
-  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.4, stat="binline", scale=1) +
-  scale_fill_manual(values=groups[c(3,5,1)]) +
+  geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, stat="binline", scale=1) +
+  scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(legend.position = "right")
 plot.legend
 legend <- cowplot::get_legend(plot.legend)
@@ -522,7 +536,7 @@ pred <- read.csv("Results/RSFPredictions.csv")
 #6b. Set factor levels----
 pred$Region <- factor(pred$Region,
                       levels=c("West", "Central", "East", "No group\ndifference"),
-                      labels=c("West group", "Central group", "East group", "No group\ndifference"))
+                      labels=c("West", "Intermountain", "Plains", "No group\ndifference"))
 pred$season <- factor(pred$season,
                       levels=c("breed", "fallmig", "winter", "springmig"),
                       labels=c("Breeding\nhome range", "Postbreeding\nmigration stopover", "Nonbreeding\nhome range", "Prebreeding\nmigration stopover"))
@@ -532,11 +546,11 @@ pred$cov <- factor(pred$cov,
 
 #6b. Plot----
 plot.covs <- ggplot(pred) +
-  geom_ribbon(aes(x=val.use, ymin=low, ymax=up, group=Region), alpha=0.3) +
-  geom_line(aes(x=val.use, y=fit, colour=Region)) +
+  geom_ribbon(aes(x=val.use, ymin=low, ymax=up, group=Region), fill="grey30", alpha = 0.1) +
+  geom_line(aes(x=val.use, y=fit, colour=Region), size=1) +
   facet_grid(season~cov, scales="free") +
   my.theme +
-  scale_colour_manual(values=c(groups[c(3, 5, 1)], "grey90"), name="") +
+  scale_colour_manual(values=c(groups[c(2,1,3)], "grey70"), name="") +
   xlab("Attribute value") +
   ylab("Marginal relative probability of use") +
   theme(axis.text.x = element_text(size=9),
@@ -815,7 +829,7 @@ dat.all %>%
 dat.all %>%
   dplyr::filter(var=="HRarea") %>% 
   group_by(season) %>% 
-  dplyr::filter(region!="Central") %>% 
+  dplyr::filter(region!="Intermountain") %>% 
   summarize(area= mean(val),
             sd = sd(val, na.rm=TRUE))
 
@@ -846,8 +860,8 @@ dat.traj <- rbindlist(traj, idcol=TRUE) %>%
   dplyr::filter(!is.na(dist)) %>% 
   mutate(dist = dist/1000) %>% 
   mutate(region = case_when(kdecluster==2 ~ "West", 
-                            kdecluster==1 ~ "Central",
-                            kdecluster==3 ~ "East"))
+                            kdecluster==1 ~ "Intermountain",
+                            kdecluster==3 ~ "Plains"))
 
 ggplot(dat.traj) +
   geom_histogram(aes(x=dist, fill=region)) +
@@ -902,6 +916,13 @@ birds <- read.csv("Data/LBCUMCLocations.csv") %>%
                              study=="USGS" ~ 1,
                              study=="WY" ~ 8)) %>% 
   dplyr::select(studyid, id, startyear, endyear, days, use) %>% 
-  arrange(studyid, id)
+  arrange(studyid, id) %>% 
+  left_join(read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
+                       dplyr::select(id, sex) %>% 
+                       unique())
 
 write.csv(birds, "Data/LBCUIndividualMetadata.csv", row.names = FALSE)
+
+lee <- read.csv("Data/lbcu_id_for_Elly.csv")
+
+
