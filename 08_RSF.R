@@ -247,3 +247,4 @@ ggplot(pred) +
   geom_line(aes(x=val.use, y=fit, colour=Region)) +
   facet_grid(cov~season, scales="free")
 
+#13. Availability----
