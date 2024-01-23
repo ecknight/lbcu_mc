@@ -11,8 +11,6 @@ library(viridis)
 library(ebirdst)
 library(raster)
 
-#TO DO: STANDARDIZE POINT BORDER COLOUR
-
 my.theme <- theme_classic() +
   theme(text=element_text(size=12, family="Arial"),
         axis.text.x=element_text(size=12),
@@ -30,7 +28,9 @@ map.theme <- theme_nothing() +
         axis.title.x=element_text(margin=margin(10,0,0,0)),
         axis.title.y=element_text(margin=margin(0,10,0,0)),
         axis.text = element_blank(),
-        plot.title = element_text(hjust = 0.5)) +
+        plot.title = element_text(hjust = 0.5),
+        legend.text=element_text(size=12),
+        legend.title=element_text(size=12)) +
   theme(plot.margin = margin(t = 1, r = 1, b = 1, l = 1))
 
 #Get map data
@@ -73,11 +73,13 @@ study <- data.frame(study = unique(dat$study)) %>%
   mutate(studyid = c(6,4,9,7,2,3,5,1,8))
 
 #Get deployment data and match to nearest location for sample size per deployment location
+dep.raw <- read.csv("Data/DeploymentLocations.csv")%>% 
+  st_as_sf(coords=c("long", "lat"), crs=4326, remove=FALSE)
+
 dep <- dat %>% 
   mutate(deprow = dat %>% 
            st_as_sf(coords=c("long", "lat"), crs=4326) %>% 
-           st_nearest_feature(read.csv("Data/DeploymentLocations.csv") %>% 
-                                st_as_sf(coords=c("long", "lat"), crs=4326))) %>% 
+           st_nearest_feature(dep.raw)) %>% 
   dplyr::select(-long, -lat) %>% 
   left_join(read.csv("Data/DeploymentLocations.csv") %>% 
               mutate(deprow = row_number())) %>% 
@@ -114,17 +116,17 @@ plot.sa <- ggplot() +
   geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
   geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
   coord_sf(xlim=c(-129, -75), ylim=c(15, 57), expand = FALSE, crs=4326) +
-  geom_tile(data = range.pt, aes(x = x, y = y, fill=season), alpha = 0.7) +
-  geom_point(data=dep, aes(x=long, y=lat, size=n), pch=21, colour="grey90", fill="grey30", alpha = 0.7) +
+  geom_tile(data = range.pt, aes(x = x, y = y, fill=season), alpha = 1) +
+  geom_point(data=dep, aes(x=long, y=lat, size=n), pch=21, colour="black", fill="white", alpha = 0.7) +
   xlab("") +
   ylab("") +
   map.theme +
   theme(legend.position = "right") +
   scale_size(range = c(2, 7), name="Individuals\ntagged") +
-  scale_fill_manual(values=c(as.character(seasons[c(1,4)]), "purple4"), name="Seasonal\nrange")
+  scale_fill_manual(values=c(as.character(seasons[c(1,4)]), "grey50"), name="Seasonal\nrange")
 plot.sa
 
-ggsave(plot.sa, filename="Figs/Fig1StudyArea.jpeg", width=8, height=6)
+ggsave(plot.sa, filename="Figs/Fig1StudyArea.jpeg", width=6, height=4)
 
 #2. Figure 2: All tracks figure----
 raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv")
@@ -173,7 +175,8 @@ plot.spring <- ggplot() +
   ggtitle("Prebreeding migration") +
   scale_fill_manual(values=as.character(seasons[c(4,3,1)])) +
   theme(axis.title.x = element_blank(),
-        axis.title.y = element_blank())
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=12))
 plot.spring
 
 #plot fall
@@ -188,7 +191,8 @@ plot.fall <- ggplot() +
   ggtitle("Postbreeding migration")  +
   scale_fill_manual(values=as.character(seasons[c(4,1,3)])) +
   theme(axis.title.x = element_blank(),
-        axis.title.y = element_blank())
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=12))
 plot.fall
 
 #make legend
@@ -197,7 +201,9 @@ plot.legend <- ggplot() +
   geom_line(data=div, aes(x=lon, y=lat, group=div, linetype=season), size=1) +
   scale_fill_manual(values=as.character(seasons[c(4,1,3)]), name="Season", labels=c("Stationary\nnonbreeding",  "Breeding", "Migration\nstopover")) + 
   scale_linetype_manual(values=c("dashed"), labels=c("Hypothesized\nmigratory divide"), name="") +
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom",
+        legend.text=element_text(size=12),
+        legend.title=element_text(size=12))
 plot.legend
 legend <- cowplot::get_legend(plot.legend)
 
@@ -206,7 +212,7 @@ ggsave(grid.arrange(plot.spring, plot.fall, legend,
                     heights = c(4,1),
                     widths = c(4,4),
                     layout_matrix = rbind(c(1,2),
-                                          c(3,3))), filename="Figs/Fig2Tracks.jpeg", width=8, height=5)
+                                          c(3,3))), filename="Figs/Fig2Tracks.jpeg", width=6, height=4)
 
 #3. Figure 3: Clustering figure----
 
@@ -253,7 +259,8 @@ plot.clust <- ggplot(clust.ll) +
   theme(legend.position = "bottom") +
   scale_fill_manual(values=groups, name="Group") +
   guides(fill=guide_legend(nrow=1,byrow=TRUE)) +
-  theme(panel.spacing = unit(0.2, "lines"))
+  theme(panel.spacing = unit(0.2, "lines"),
+        legend.margin=margin(-10,0,0,0))
 plot.clust
 
 #3c. Connectivity wrangling----
@@ -283,16 +290,20 @@ plot.mc <- ggplot(sum) +
   ylim(c(0,1)) +
   facet_grid(targetseason ~ originseason) +
   theme(strip.background = element_blank(),
-        strip.text.y = element_blank()) +
+        strip.text.y = element_blank(),
+        strip.text.x = element_text(size=10),
+        axis.text.x=element_text(size=10),
+        axis.text.y=element_text(size=10),
+        legend.title=element_text(size=12)) +
   ggtitle("Reference season for migratory\nconnectivity estimation")
 plot.mc
 
 #3e. Put together----
 ggsave(grid.arrange(plot.clust, plot.mc,
                     widths = c(3.5,6.5),
-                    heights = c(1,20),
+                    heights = c(1.5,20),
                     layout_matrix = rbind(c(2,NA),
-                                          c(2,1))), filename="Figs/Fig3Cluster.jpeg", width=8, height=8)
+                                          c(2,1))), filename="Figs/Fig3Cluster.jpeg", width=7, height=7)
 
 #4. Trend----
 
@@ -340,7 +351,7 @@ plot.map <- ggplot(trend.list) +
   xlab("") +
   ylab("") +
 #  geom_text(aes(x=-95, y=56, label="A"), size=10)
-  theme(plot.margin = margin(t = 0.5, r = 1, b = 1, l = 0))
+  theme(plot.margin = margin(t = 0.5, r = 0, b = 1, l = 0))
 
 plot.map
 
@@ -357,7 +368,8 @@ plot.bar <- ggplot(trend) +
         strip.background = element_blank(),
         strip.text.x = element_blank(),
         axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
+        axis.ticks.x = element_blank(),
+        axis.title.y=element_text(vjust=-1.5))
 #  geom_text(aes(x=3.4, y=4.4, label="B"), size=10)
 plot.bar
 
@@ -380,7 +392,8 @@ plot.index <- ggplot(indices) +
   theme(legend.position="none",
         strip.background = element_blank(),
         strip.text.x = element_blank(),
-        plot.margin = margin(t=1, r = 10))
+        plot.margin = margin(t=1, r = 10),
+        axis.title.y=element_text(vjust=-1.5))
 #  geom_text(aes(x=2020, y=7.9, label="C"), size=10)
 plot.index
 
@@ -390,7 +403,9 @@ plot.legend <- ggplot(indices) +
   geom_line(aes(x=Year, y=Index, group=Region, colour=factor(Trend))) +
   scale_colour_manual(values=groups[c(2,1,3)], name="Group", labels=c("West", "Intermountain", "Plains")) +
   ylab("Relative abundance index") + 
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom",
+        legend.text = element_text(size=12),
+        legend.margin=margin(-10,0,0,0))
 
 legend <- get_legend(plot.legend)
 
@@ -399,7 +414,7 @@ ggsave(grid.arrange(plot.map, plot.bar, plot.index, legend,
                     widths = c(3,3,3), heights = c(2,0.3),
                     layout_matrix = rbind(c(1,2,3),
                                           c(NA,4,NA))),
-       height=3.8, width=10, units='in', filename="Figs/Fig4Trend.jpeg")
+       height=3, width=8, units='in', filename="Figs/Fig4Trend.jpeg")
 
 #5. Behavioural attributes----
 
@@ -419,7 +434,9 @@ plot.dep <- ggplot(dat %>% dplyr::filter(var=="depart")) +
   ylab("") +
   scale_x_continuous(breaks=c(32, 91, 152, 213), labels=c("Feb", "Apr", "Jun", "Aug")) +
   scale_fill_manual(values=groups[c(2,1,3)]) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.dep
 
 #5c. Arrival----
@@ -431,7 +448,9 @@ plot.arr <- ggplot(dat %>% dplyr::filter(var=="arrive")) +
   scale_x_continuous(breaks=c(91, 152, 213, 274), labels=c("Apr", "Jun", "Aug", "Oct")) +
   scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.arr
 
 #5d. Duration----
@@ -441,8 +460,10 @@ plot.dur <- ggplot(dat %>% dplyr::filter(var=="duration")) +
   xlab("Days of migration") +
   ylab("") +
   scale_fill_manual(values=groups[c(2,1,3)]) +
-  theme(axis.text.y = element_blank()) +
-  theme(legend.position = "none")
+#  theme(axis.text.y = element_blank()) +
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.dur
 
 #5e. Distance----
@@ -453,7 +474,9 @@ plot.dist <- ggplot(dat %>% dplyr::filter(var=="dist")) +
   ylab("") +
   scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.dist
 
 #5f. Rate----
@@ -463,7 +486,9 @@ plot.rate <- ggplot(dat %>% dplyr::filter(var=="rate")) +
   xlab("Migration rate (100 km/day)") +
   ylab("") +
   scale_fill_manual(values=groups[c(2,1,3)]) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.rate
 
 #5g. Stopovers----
@@ -473,8 +498,10 @@ plot.stop <- ggplot(dat %>% dplyr::filter(var=="Stopovers")) +
   xlab("Number of migration stopovers") +
   ylab("") +
   scale_fill_manual(values=groups[c(2,1,3)]) +
-  theme(axis.text.y = element_blank()) +
-  theme(legend.position = "none")
+#  theme(axis.text.y = element_blank()) +
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.stop
 
 #5h. Stopover duration----
@@ -485,7 +512,9 @@ plot.stopdur <- ggplot(dat %>% dplyr::filter(var=="stopoverduration")) +
   ylab("") +
   scale_fill_manual(values=groups[c(2,1,3)]) +
   theme(axis.text.y = element_blank()) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.stopdur
 
 #5i. Number of wintering ranges----
@@ -498,7 +527,9 @@ plot.wint <- ggplot(dat %>% dplyr::filter(var=="WinterHRs")) +
   theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank()) +
   scale_x_continuous(breaks=c(1,2,3), labels=c(1,2,3)) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.wint
 
 #5j. Range area----
@@ -508,25 +539,32 @@ plot.hr <- ggplot(dat %>% dplyr::filter(var=="HRarea")) +
   xlab("Natural log of use area") +
   ylab("") +
   scale_fill_manual(values=groups[c(2,1,3)]) +
-  theme(legend.position = "none")
+  theme(legend.position = "none") +
+  theme(plot.margin = margin(r=10, b=10),
+        axis.title.x.bottom = element_text(vjust=5))
 plot.hr
 
 #5j. Legend----
 plot.legend <- ggplot(dat) +
   geom_density_ridges(aes(x=val, y=season, fill=Group), alpha = 0.5, stat="binline", scale=1) +
   scale_fill_manual(values=groups[c(2,1,3)]) +
-  theme(legend.position = "right")
+  theme(legend.position = "right",
+        legend.text=element_text(size=12),
+        legend.title=element_text(size=12),
+        legend.key.size = unit(2,"line"))
 plot.legend
 legend <- cowplot::get_legend(plot.legend)
-
+ 
 #5h. Put together----
 plot.behav <- grid.arrange(plot.dep, plot.arr, plot.dur, plot.dist, plot.rate, plot.stopdur, plot.stop, plot.hr, plot.wint, legend,
-                           widths = c(4,3,3,3), heights=c(3,3,3),
-                           layout_matrix=rbind(c(1,2,3,4),
-                                               c(5,6,7,NA),
-                                               c(8,9,10,NA)))
+                           widths = c(4,3), heights=c(3,3,3,3,3),
+                           layout_matrix=rbind(c(1,2),
+                                               c(3,4),
+                                               c(5,6),
+                                               c(7,9),
+                                               c(8,10)))
 
-ggsave(plot.behav, filename="Figs/Fig5Behave.jpeg", width = 12, height = 9)
+ggsave(plot.behav, filename="Figs/Fig5Behave.jpeg", width = 7, height = 14)
 
 #6. Habitat selection----
 
@@ -554,7 +592,10 @@ plot.covs <- ggplot(pred) +
   xlab("Attribute value") +
   ylab("Marginal relative probability of use") +
   theme(axis.text.x = element_text(size=9),
-        axis.text.y = element_text(size=9))
+        axis.text.y = element_text(size=9),
+        legend.text = element_text(size=12),
+        strip.text.x = element_text(size=12),
+        strip.text.y = element_text(size=12))
 plot.covs
 
 ggsave(plot.covs, filename="Figs/Fig6RSF.jpeg", width = 10, height=8)
