@@ -330,8 +330,17 @@ trend$Region <- factor(trend$Region, levels=c("West", "Intermountain", "Plains")
 #4b. BBS Regions----
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>% 
   dplyr::filter(season=="breed", nclust==3) %>% 
-  dplyr::select(id, group, lat, lon) %>% 
-  unique()  %>% 
+  group_by(id, group) %>%
+  summarize(n=n()) %>% 
+  group_by(id) %>% 
+  dplyr::filter(n == max(n)) %>% 
+  ungroup() %>% 
+  left_join(read.csv("Data/LBCUKDEClusters.csv") %>% 
+              dplyr::filter(season=="breed", nclust==3)) %>% 
+  group_by(id, group) %>%
+  summarize(lat=mean(lat),
+            lon=mean(lon))  %>% 
+  ungroup() %>% 
   mutate(Region = case_when(group==1 ~ "Intermountain",
                             group==2 ~ "West",
                             group==3 ~ "Plains")) %>% 
@@ -352,7 +361,6 @@ plot.map <- ggplot(trend.list) +
   ylab("") +
 #  geom_text(aes(x=-95, y=56, label="A"), size=10)
   theme(plot.margin = margin(t = 0.5, r = 0, b = 1, l = 0))
-
 plot.map
 
 #4c. Trend----
