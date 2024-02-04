@@ -598,7 +598,7 @@ plot.covs <- ggplot(pred) +
   my.theme +
   scale_colour_manual(values=c(groups[c(2,1,3)], "grey70"), name="") +
   xlab("Attribute value") +
-  ylab("Marginal relative probability of use") +
+  ylab("Marginal relative probability of selection") +
   theme(axis.text.x = element_text(size=9),
         axis.text.y = element_text(size=9),
         legend.text = element_text(size=12),
