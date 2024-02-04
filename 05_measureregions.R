@@ -22,6 +22,7 @@ clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
 
 #3. Import & wrangle daily locations----
 #filter out migration (not stopovers)
+#take out some egregious misclassifications to fix overestimates of home range
 dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
   dplyr::filter(id %in% clust$id,
                 !(season %in% c("springmig", "fallmig") & stopover==0),
@@ -33,7 +34,9 @@ dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
   group_by(nclust, kdeid) %>% 
   mutate(n=n()) %>% 
   ungroup() %>% 
-  dplyr::filter(n >= 5)
+  dplyr::filter(n >= 5) %>% 
+  dplyr::filter(!(id==1418951627 & year==2020 & season=="breed" & X > -12030000 & Y < 6050000),
+                !(id==46768108 & year==2015 & season=="breed" & Y < 5800000))
 
 #4. Make sp object----
 dat.sp <- dat %>% 
@@ -113,6 +116,8 @@ regs <- dat %>%
   unique() %>% 
   mutate(ID = paste(nclust, group, season))
 
+isos <- seq(5, 95, 5)
+
 kd.sp <- data.frame()
 for(i in c(1:nrow(regs))){
   
@@ -136,18 +141,23 @@ for(i in c(1:nrow(regs))){
   kd.r.1 <- (kd.r-minValue(kd.r))/(maxValue(kd.r)-minValue(kd.r))
   raster::writeRaster(kd.r.1, paste0("gis/raster_reg/kde_", regs$ID[i], ".tif"), overwrite=TRUE)
   
-  #5. Get shp of 95% isopleth----
-  kd.sp.i <- try(getverticeshr(kd, percent=95) %>% 
-                   st_as_sf() %>% 
-                   st_transform(crs=4326))
-  
-  if(class(kd.sp.i)[1]=="sf"){
-    kd.sp <- rbind(kd.sp, kd.sp.i)
+  #5. Get shp of isopleths----
+  for(j in 1:length(isos)){
+    
+    kd.sp.i <- try(getverticeshr(kd, percent=isos[j]) %>% 
+                     st_as_sf() %>% 
+                     st_transform(crs=4326))
+    
+    if(class(kd.sp.i)[1]=="sf"){
+      kd.sp <- rbind(kd.sp, kd.sp.i %>% 
+                       mutate(iso = isos[j]))
+    }
+    else{
+      file.remove(paste0("gis/raster/kde_", regs[i], ".tif"))
+    }
+    
   }
-  else{
-    file.remove(paste0("gis/raster/kde_", inds[i], ".tif"))
-  }
-  
+
   print(paste0("Finished region ", i, " of ", nrow(regs)))
   
 }
@@ -156,6 +166,6 @@ for(i in c(1:nrow(regs))){
 kd.out <- kd.sp %>% 
   mutate(area = round(area)/100, 
          rad = round(sqrt(area/pi), 1)) %>% 
-  separate(id, into=c("nclust", "group", "season"), remove=FALSE)
+  separate(id, into=c("nclust", "group", "season"), remove=TRUE)
 
 write_sf(kd.out, "gis/shp/kde_region.shp")
