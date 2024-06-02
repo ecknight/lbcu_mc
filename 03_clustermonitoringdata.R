@@ -80,22 +80,19 @@ ggplot() +
 write.csv(bbs.use, "Data/BBSRoutesToUse.csv", row.names=FALSE)
 
 #4. Set # of clusters---
-clusts <- c("3")
+clusts <- c("2", "3", "expert")
 
 #B. PREDICT TO BBS DATA####
 
-#1. Set up bootstrap loop----
-boot <- max(track.raw$boot)
-
+#1. Set up cluster loop----
 knn.out <- list()
-for(i in 1:boot){
+for(i in 1:length(clusts)){
   
   set.seed(i)
   
   #2. Wrangle tracking data----
   track.i <- track.raw %>% 
-    dplyr::filter(nclust==clusts,
-                  boot==i,
+    dplyr::filter(nclust==clusts[i],
                   season=="breed")
   
   #3. Put together with BBS data----
@@ -107,64 +104,36 @@ for(i in 1:boot){
   
   knn.out[[i]] <- data.frame(knncluster=knn.i,
                              knnprob=attr(knn.i, "prob"),
-                             boot=i,
-                             nclust=clusts) %>% 
+                             nclust=clusts[i]) %>% 
     cbind(bbs.i)
   
-  print(paste0("Finished bootstrap ", i, " of ", boot))
+  print(paste0("Finished cluster ", i, " of ", length(clusts)))
   
 }
 
 #5. Collapse results----
 knn.all <- rbindlist(knn.out)
 
-#6. Look at variation in cluster membership----
-knn.sum <- knn.all %>% 
-  group_by(nclust, id, knncluster) %>% 
-  summarize(n=n()) %>% 
-  ungroup()
-summary(knn.sum$n)
-
-knn.99 <- knn.sum %>% 
-  dplyr::filter(n < 100)
-table(knn.99$id)
-length(unique(knn.99$id))
-#88 points that have 1 instance of cluster variation
-
-#7. Pick mode cluster ID for each route----
-# Create the function.
-getmode <- function(v) {
-  uniqv <- unique(v)
-  uniqv[which.max(tabulate(match(v, uniqv)))]
-}
-
-knn.final <- knn.all %>% 
-  group_by(id) %>% 
-  summarize(knncluster = getmode(knncluster)) %>% 
-  ungroup() %>% 
-  left_join(bbs.use %>% 
-              dplyr::select(-n))
-
-#8. Visualize----
+#6. Visualize----
 track.final <- track.raw %>% 
   dplyr::filter(season=="breed",
                 nclust %in% clusts)
 
-ggplot(knn.final) +
+ggplot(knn.all) +
   geom_point(aes(x=X, y=Y, colour=factor(knncluster))) +
   geom_point(data=track.final, aes(x=X, y=Y, colour=factor(group)), pch=21, fill="white", size=3) +
   facet_wrap(~nclust)
 
 #9. Calculate MCP area for BBSbayes-----
-sp <- SpatialPointsDataFrame(coords=cbind(knn.final$X, knn.final$Y), 
-                               data=data.frame(ID=knn.final$knncluster),
+sp <- SpatialPointsDataFrame(coords=cbind(knn.all$X, knn.all$Y), 
+                               data=data.frame(ID=paste0(knn.all$nclust, "_", knn.all$knncluster)),
                                proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
 
 mp <- mcp(sp[,1], percent=100)
 
 knn.area <- data.frame(mp) %>% 
-  rename(knncluster = id)
+  separate(id, into=c("knncluster", "nclust"))
 
 #15. Save out----
 write.csv(knn.area, "Data/area_weight.csv", row.names = FALSE)
-write.csv(knn.final, "Data/LBCUBBSClusters.csv", row.names = FALSE)
+write.csv(knn.all, "Data/LBCUBBSClusters.csv", row.names = FALSE)
