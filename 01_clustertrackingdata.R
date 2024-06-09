@@ -32,77 +32,77 @@ dat.use <- dat |>
   dplyr::filter(id %in% dat.n$id)
 
 #3. Get single seasonal location for each individual----
-# #This is currently just the single location with most days, could cluster spatially and sum days across years
-# dat.main <- dat.use |> 
-#   group_by(id, season) |> 
-#   dplyr::filter(days==max(days)) |> 
-#   sample_n(1) |> 
-#   ungroup()
-
-#Take weighted mean across years for the breeding season
-dat.main.breed <- dat.use |> 
-  dplyr::filter(season=="breed") |> 
-  group_by(id, season) |> 
-  summarize(X = mean((X*days)/days),
-            Y = mean((Y*days)/days)) |> 
+#This is currently just the single location with most days, could cluster spatially and sum days across years
+dat.main <- dat.use |>
+  group_by(id, season) |>
+  dplyr::filter(days==max(days)) |>
+  sample_n(1) |>
   ungroup()
 
-#Use single clustered location with most days for the other seasons
-dat.list <- dat.use |> 
-  dplyr::filter(season!="breed") |> 
-  dplyr::select(id, season) |> 
-  unique()
-
-dat.main.other <- data.frame()
-for(i in 1:nrow(dat.list)){
-  
-  #Get the data for this iteration
-  dat.i <- dat.use %>% 
-    dplyr::filter(id==dat.list$id[i],
-                  season==dat.list$season[i])
-  
-  #cluster
-  mat1 <- matrix(dat.i$X)
-  mat2 <- matrix(dat.i$Y)
-  mat <- cbind(mat1, mat2)
-  
-  shift <- meanShift(mat,
-                     algorithm="KDTREE",
-                     bandwidth=c(1,1))
-  
-  #join cluster ID back to data
-  dat.shift <- dat.i %>% 
-    mutate(cluster = shift[[1]][,1])
-  
-  #Pick the cluster ID with the most days and calculate weighted mean of coordinates
-  dat.select <- dat.shift |> 
-    group_by(cluster) |> 
-    summarize(days = sum(days)) |> 
-    ungroup() |> 
-    dplyr::filter(days==max(days)) |> 
-    left_join(dat.shift |> dplyr::select(-days)) |> 
-    group_by(id) |> 
-    summarize(X = mean((X*days)/days),
-              Y = mean((Y*days)/days)) |> 
-    ungroup()
-
-  #Save
-  dat.main.other <- rbind(dat.main.other,
-                          dat.select |> 
-                            mutate(season = dat.list$season[i]))
-  
-}
-
-#Put together----
-dat.main <- rbind(dat.main.breed, dat.main.other) |> 
-  dplyr::filter(!is.na(id)) |> 
-  st_as_sf(coords=c("X", "Y"), crs=3857) |> 
-  st_transform(crs=4326) |> 
-  st_coordinates() |> 
-  data.frame() |> 
-  rename("lon"="X", "lat"= "Y") |> 
-  cbind(rbind(dat.main.breed, dat.main.other)|> 
-          dplyr::filter(!is.na(id))) 
+# #Take weighted mean across years for the breeding season
+# dat.main.breed <- dat.use |> 
+#   dplyr::filter(season=="breed") |> 
+#   group_by(id, season) |> 
+#   summarize(X = mean((X*days)/days),
+#             Y = mean((Y*days)/days)) |> 
+#   ungroup()
+# 
+# #Use single clustered location with most days for the other seasons
+# dat.list <- dat.use |> 
+#   dplyr::filter(season!="breed") |> 
+#   dplyr::select(id, season) |> 
+#   unique()
+# 
+# dat.main.other <- data.frame()
+# for(i in 1:nrow(dat.list)){
+#   
+#   #Get the data for this iteration
+#   dat.i <- dat.use %>% 
+#     dplyr::filter(id==dat.list$id[i],
+#                   season==dat.list$season[i])
+#   
+#   #cluster
+#   mat1 <- matrix(dat.i$X)
+#   mat2 <- matrix(dat.i$Y)
+#   mat <- cbind(mat1, mat2)
+#   
+#   shift <- meanShift(mat,
+#                      algorithm="KDTREE",
+#                      bandwidth=c(1,1))
+#   
+#   #join cluster ID back to data
+#   dat.shift <- dat.i %>% 
+#     mutate(cluster = shift[[1]][,1])
+#   
+#   #Pick the cluster ID with the most days and calculate weighted mean of coordinates
+#   dat.select <- dat.shift |> 
+#     group_by(cluster) |> 
+#     summarize(days = sum(days)) |> 
+#     ungroup() |> 
+#     dplyr::filter(days==max(days)) |> 
+#     left_join(dat.shift |> dplyr::select(-days)) |> 
+#     group_by(id) |> 
+#     summarize(X = mean((X*days)/days),
+#               Y = mean((Y*days)/days)) |> 
+#     ungroup()
+# 
+#   #Save
+#   dat.main.other <- rbind(dat.main.other,
+#                           dat.select |> 
+#                             mutate(season = dat.list$season[i]))
+#   
+# }
+# 
+# #Put together----
+# dat.main <- rbind(dat.main.breed, dat.main.other) |> 
+#   dplyr::filter(!is.na(id)) |> 
+#   st_as_sf(coords=c("X", "Y"), crs=3857) |> 
+#   st_transform(crs=4326) |> 
+#   st_coordinates() |> 
+#   data.frame() |> 
+#   rename("lon"="X", "lat"= "Y") |> 
+#   cbind(rbind(dat.main.breed, dat.main.other)|> 
+#           dplyr::filter(!is.na(id))) 
 
 #4. Make wide----
 dat.wide <- dat.main |> 
@@ -148,7 +148,8 @@ dat.near <- dat.sf %>%
   st_nearest_feature(coast)
 
 dat.coast <- data.frame(distance = as.numeric(st_distance(dat.sf, coast[dat.near,], by_element = TRUE))) %>% 
-  cbind(dat.main)
+  cbind(dat.main |> 
+          dplyr::select(-distance))
 
 #check
 ggplot(dat.coast) +
