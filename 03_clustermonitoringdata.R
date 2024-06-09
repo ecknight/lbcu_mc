@@ -80,7 +80,7 @@ ggplot() +
 write.csv(bbs.use, "Data/BBSRoutesToUse.csv", row.names=FALSE)
 
 #4. Set # of clusters---
-clusts <- c("2", "3", "expert")
+clusts <- c("3", "expert", "flyway")
 
 #B. PREDICT TO BBS DATA####
 
