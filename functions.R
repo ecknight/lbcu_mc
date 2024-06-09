@@ -14,7 +14,7 @@ extract_index_data <- function (jags_mod = NULL, alt_n = "n", jags_data = NULL)
                                  strat = bugs_data$strat, stringsAsFactors = FALSE))
   strat_list = strat_list[order(strat_list$strat), ]
   strata_used <- strat_list$strat_name
-  strata_num <- strat_list$strat
+  strata_num <- unique(strat_list$strat)
   area_weights <- all_area_weights[which(all_area_weights$region %in% 
                                            strata_used), ]
   area_weights <- area_weights[order(match(area_weights$region, 
