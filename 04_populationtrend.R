@@ -67,35 +67,6 @@ for(i in 1:length(clusts)){
 
 #TRENDS####
 
-#1. Fix function----
-extract_index_data <- function (jags_mod = NULL, alt_n = "n", jags_data = NULL) 
-{
-  stratify_by <- jags_mod$stratify_by
-  
-  n <- jags_mod$sims.list[[alt_n]]
-  
-  bugs_data <- dat
-  
-  y_min <- bugs_data$ymin
-  y_max <- bugs_data$ymax
-  strat_list = unique(data.frame(strat_name = jags_mod$strat_name, 
-                                 strat = bugs_data$strat, stringsAsFactors = FALSE))
-  strat_list = strat_list[order(strat_list$strat), ]
-  strata_used <- strat_list$strat_name
-  strata_num <- unique(strat_list$strat)
-  area_weights <- all_area_weights[which(all_area_weights$region %in% 
-                                           strata_used), ]
-  area_weights <- area_weights[order(match(area_weights$region, 
-                                           strata_used)), ]
-  area_weights$num <- strata_num
-  
-  original_data = get_prepared_data(jags_data = jags_data)
-  
-  return(list(n = n, area_weights = area_weights, y_min = y_min, 
-              y_max = y_max, r_year = jags_mod$r_year, bugs_data = bugs_data, 
-              original_data = original_data))
-}
-
 #1. Set up another cluster loop----
 
 trend.list <- list()
