@@ -768,7 +768,7 @@ mc.df <- read.csv("Data/LBCUMigConnectivity.csv")
 ggplot(mc.df) +
   geom_point(aes(x=nclust, y=MC)) +
   geom_errorbar(aes(x=nclust, ymin = MClow, ymax = MChigh)) +
-  facet_grid(originseason ~ targetseason)
+  facet_grid(originseason ~ targetseason, scales="free")
 
 #14. MC winner----
 mc.sum <- mc.df %>% 
@@ -779,6 +779,7 @@ mc.sum <- mc.df %>%
             MClow = mean(MClow),
             MChigh = mean(MChigh)) %>% 
   ungroup()
+mc.sum
 
 ggplot(mc.sum) +
   geom_point(aes(x=nclust, y=MCmean)) +
