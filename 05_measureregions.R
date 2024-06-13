@@ -9,16 +9,15 @@ library(MuMIn)
 #A. INDIVIDUAL HOME RANGES####
 
 #1. Set number of clusters----
-n <- c("3", "manual")
+n <- c("3", "expert", "flyway")
 
 #2. Get dominant cluster id for each bird----
 #mean works because it's always just between 2 clusters
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>% 
   dplyr::filter(nclust %in% n,
-                !is.na(X)) %>% 
-  group_by(id, nclust) %>% 
-  summarize(group = round(mean(group))) %>% 
-  ungroup()
+                !is.na(X)) |> 
+  dplyr::select(id, year, nclust, group) |> 
+  unique()
 
 #3. Import & wrangle daily locations----
 #filter out migration (not stopovers)

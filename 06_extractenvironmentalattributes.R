@@ -111,10 +111,10 @@ covs <- dat  %>%
   separate(id, into=c("nclust", "group", "season", "bird", "year", "cluster"), remove=FALSE) %>% 
   mutate(year = as.numeric(year)) %>% 
 #  mutate(id=paste(group, season, birdid, year, cluster, sep="-")) %>% 
-  left_join(kde.raw %>% 
+  left_join(kde %>% 
               st_coordinates() %>% 
               data.frame() %>% 
-              cbind(data.frame(kde.raw)) %>% 
+              cbind(data.frame(kde)) %>% 
               dplyr::select(-id, -geometry)) %>% 
   mutate(change = ifelse(is.na(change), 0, change),
          seasonality = ifelse(is.na(seasonality), 0, seasonality),
@@ -132,71 +132,77 @@ write.csv(covs, "Data/LBCU_environvars.csv", row.names = FALSE)
 kde <- read_sf("gis/shp/kde_region.shp") %>% 
   st_make_valid() 
 
-#2. Send to gee---
-data <- sf_as_ee(kde)
+#2. Set up to loop through nclust---
+clusts <- unique(kde$nclust)[c(1:3)]
 
-#2. Set up to loop through years----
-years <- c(2006:2020)
-for(i in 1:length(years)){
+dat.out <- list()
+for(h in 1:length(clusts)){
   
-  #3. Get drought data----
-  tclim.drght <- ee$ImageCollection('IDAHO_EPSCOR/TERRACLIMATE')$filter(ee$Filter$date(paste0(years[i], "-01-01"), paste0(years[i], "-12-31")))$select('pdsi')$mean()
+  #3. Filter data----
+  kde.h <- kde |> 
+    dplyr::filter(nclust==clusts[h])
   
-  #4. Get MODIS landcover----
-  modis <- ee$ImageCollection("MODIS/006/MCD12Q1")$filter(ee$Filter$date(paste0(years[i], "-01-01"), paste0(years[i], "-12-31")))$select('LC_Type1')$mean()
+  #4. Send to gee---
+  data <- sf_as_ee(kde.h)
   
-  modis.grass <- modis$remap(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17), c(0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0))
-  modis.crop <- modis$remap(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17), c(0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0))
-  modis.built <- modis$remap(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17), c(0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0))
-  modis.wetland <- ee$ImageCollection("MODIS/006/MCD12Q1")$filter(ee$Filter$date(paste0(years[i], "-01-01"), paste0(years[i], "-12-31")))$select('LC_Prop3')$mean()$remap(c(1,2,3,10,20,27,30,40,50), c(0,0,0,0,0,0,0,1,0))
+  #5. Set up to loop through years----
+  years <- c(2006:2020)
+  stack.mn <- list()
+  for(i in 1:length(years)){
+    
+    #6. Get drought data----
+    tclim.drght <- ee$ImageCollection('IDAHO_EPSCOR/TERRACLIMATE')$filter(ee$Filter$date(paste0(years[i], "-01-01"), paste0(years[i], "-12-31")))$select('pdsi')$mean()
+    
+    #7. Get MODIS landcover----
+    modis <- ee$ImageCollection("MODIS/006/MCD12Q1")$filter(ee$Filter$date(paste0(years[i], "-01-01"), paste0(years[i], "-12-31")))$select('LC_Type1')$mean()
+    
+    modis.grass <- modis$remap(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17), c(0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0))
+    modis.crop <- modis$remap(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17), c(0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0))
+    modis.built <- modis$remap(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17), c(0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0))
+    modis.wetland <- ee$ImageCollection("MODIS/006/MCD12Q1")$filter(ee$Filter$date(paste0(years[i], "-01-01"), paste0(years[i], "-12-31")))$select('LC_Prop3')$mean()$remap(c(1,2,3,10,20,27,30,40,50), c(0,0,0,0,0,0,0,1,0))
+    
+    #8. Get global surface water layer (1984 to 2021)----
+    gsw.chg<-ee$Image('JRC/GSW1_3/GlobalSurfaceWater')$select('change_norm')
+    gsw.mths<-ee$Image('JRC/GSW1_3/GlobalSurfaceWater')$select('seasonality')
+    
+    #9. Stack them----
+    stack <- gsw.chg$addBands(gsw.mths)$addBands(tclim.drght)$addBands(modis.crop)$addBands(modis.built)$addBands(modis.grass)$addBands(modis.wetland)$rename("change", "seasonality", "drought", "crop", "built", "grass", "wetland")
+    
+    #10. Extract mean values---
+    stack.mn[[i]] <- ee_extract(stack, data,
+                           fun = ee$Reducer$mean(),
+                           scale = 1000)
+
+    print(paste0("Finished year ", i, " of ", length(years)))
+    
+  }
   
-  #5. Get global surface water layer (1984 to 2021)----
-  gsw.chg<-ee$Image('JRC/GSW1_3/GlobalSurfaceWater')$select('change_norm')
-  gsw.mths<-ee$Image('JRC/GSW1_3/GlobalSurfaceWater')$select('seasonality')
+  dat.out[[h]] <- do.call(rbind, stack.mn)
   
-  #6. Stack them----
-  stack <- gsw.chg$addBands(gsw.mths)$addBands(tclim.drght)$addBands(modis.crop)$addBands(modis.built)$addBands(modis.grass)$addBands(modis.wetland)$rename("change", "seasonality", "drought", "crop", "built", "grass", "wetland")
-  
-  #10. Extract mean values---
-  stack.mn <- stack$reduceRegions(reducer=ee$Reducer$mean(),
-                                  collection=data,
-                                  scale=1000)
-  
-  #11. Export the values----
-  task_vector <- ee_table_to_gcs(collection=stack.mn,
-                                 bucket="lbcu",
-                                 fileFormat = "CSV",
-                                 fileNamePrefix = years[i])
-  task_vector$start()
-  ee_monitoring(task_vector, max_attempts=1000)
-  
-  #12. Download----
-  ee_gcs_to_local(task = task_vector, dsn=paste0("gis/output_reg/", years[i], ".csv"))
-  
-  print(paste0("Finished year ", i, " of ", length(years)))
+  print(paste0("Finished nclust ", h, " of ", length(clusts)))
   
 }
 
-#13. Read in output----
-files <- list.files("gis/output_reg")
-
-dat <- data.frame()
-for(i in 1:length(files)){
-  dat <- read.csv(paste0("gis/output_reg/", files[i])) %>%
-    dplyr::select(-.geo, -system.index) %>% 
-    mutate(year = str_sub(files[i], -100, -5)) %>% 
-    rbind(dat)
-}
+#11. Collapse----
+dat <- do.call(rbind, dat.out)
 
 #14. Save-----
 write.csv(dat, "Data/LBCU_environvars_region.csv", row.names = FALSE)
 
 #C. RSF - USED AND AVAILABLE####
 
+#1. Read in shapefile of HRs and get centroid----
+#just use one nclust group, no need to do twice
+kde <- read_sf("gis/shp/kde_individual.shp") %>% 
+  st_make_valid() %>% 
+  st_centroid() %>% 
+  mutate(year = as.numeric(year)-1)
+
 #1. Set up loop for combo of season * group----
 loop <- kde %>% 
   data.frame() %>% 
-  dplyr::select(group, season) %>% 
+  dplyr::filter(nclust %in% c("3", "expert", "flyway")) |> 
+  dplyr::select(nclust, group, season) %>% 
   unique()
 
 #2. MCP of home ranges----
@@ -205,8 +211,9 @@ for(i in 1:nrow(loop)){
   
   kde.i <- kde %>% 
     dplyr::filter(group==loop$group[i],
-                  season==loop$season[i]) %>% 
-    mutate(id = paste0(group, "-", season)) %>% 
+                  season==loop$season[i],
+                  nclust==loop$nclust[i]) %>% 
+    mutate(id = paste0(nclust, "-", group, "-", season)) %>% 
     dplyr::select(id) %>% 
     as_Spatial()
   
@@ -215,8 +222,9 @@ for(i in 1:nrow(loop)){
   
 }
 mcp <- do.call(rbind, mcp.list) %>% 
-  separate(id, into=c("group", "season"))
-plot(mcp)
+  separate(id, into=c("nclust", "group", "season")) |> 
+  st_make_valid()
+plot(mcp) 
 
 #3. Available points----
 set.seed(1234)
@@ -225,7 +233,8 @@ for(i in 1:nrow(loop)){
   
   n.i <- kde %>% 
     dplyr::filter(group==loop$group[i],
-                  season==loop$season[i]) %>% 
+                  season==loop$season[i],
+                  nclust==loop$nclust[i]) %>% 
     group_by(year) %>% 
     summarize(n=n()) %>% 
     ungroup()
@@ -236,6 +245,7 @@ for(i in 1:nrow(loop)){
     ids.j <- kde %>% 
       dplyr::filter(group==loop$group[i],
                     season==loop$season[i],
+                    nclust==loop$nclust[i],
                     year==n.i$year[j])
     
     avail.list[[j]] <- st_sample(mcp[i,], n.i$n[j]*10) %>% 
@@ -243,6 +253,7 @@ for(i in 1:nrow(loop)){
       data.frame() %>%
       mutate(group=loop$group[i],
              season=loop$season[i],
+             nclust=loop$nclust[i],
              year=n.i$year[j]) %>% 
       cbind(data.frame(bird = rep(ids.j$bird)))
   }
@@ -255,7 +266,7 @@ avail <- do.call(rbind, avail.list.list)
 ggplot() +
   geom_sf(data=mcp, aes(fill=group)) +
   geom_point(data=avail, aes(x=X, y=Y, colour=group)) +
-  facet_wrap(~season)
+  facet_grid(nclust~season)
 
 #4. Put used & available together----
 pts <- avail %>% 
@@ -264,7 +275,7 @@ pts <- avail %>%
           st_coordinates() %>% 
           cbind(kde) %>% 
           data.frame() %>% 
-          dplyr::select(group, season, year, bird, X, Y) %>% 
+          dplyr::select(nclust, group, season, year, bird, X, Y) %>% 
           mutate(type = "used")) %>% 
   arrange(year, season, group) %>% 
   group_by(year, season, group) %>% 
@@ -274,7 +285,7 @@ pts <- avail %>%
 #5. Define radius (mean HR size)----
 rad <- kde %>% 
   data.frame() %>% 
-  group_by(group, season) %>% 
+  group_by(nclust, group, season) %>% 
   summarize(rad = mean(rad)) %>% 
   ungroup()
 
@@ -291,7 +302,7 @@ raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
 
 #7. Set up to loop through year*season*group----
 years <- pts %>% 
-  dplyr::select(year, season, group) %>% 
+  dplyr::select(year, season, group, nclust) %>% 
   unique() %>% 
   mutate(month.start = case_when(season=="springmig" ~ "02",
                                  season=="breed" ~ "04",
@@ -311,6 +322,7 @@ for(i in 1:nrow(years)){
   pts.i <- pts %>% 
     dplyr::filter(year==years$year[i],
                   season==years$season[i],
+                  nclust==years$nclust[i],
                   group==years$group[i])
   
   #9. Send to gee----
