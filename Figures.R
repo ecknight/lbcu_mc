@@ -9,10 +9,12 @@ library(ggridges)
 library(paletteer)
 library(viridis)
 library(ebirdst)
-library(raster)
+library(terra)
+
+setwd("G:/My Drive/SMBC")
 
 my.theme <- theme_classic() +
-  theme(text=element_text(size=12, family="Arial"),
+  theme(text=element_text(size=12),
         axis.text.x=element_text(size=12),
         axis.text.y=element_text(size=12),
         axis.title.x=element_text(margin=margin(10,0,0,0)),
@@ -24,7 +26,7 @@ my.theme <- theme_classic() +
         plot.title=element_text(size=12, hjust = 0.5))
 
 map.theme <- theme_nothing() +
-  theme(text=element_text(size=12, family="Arial"),
+  theme(text=element_text(size=12),
         axis.title.x=element_text(margin=margin(10,0,0,0)),
         axis.title.y=element_text(margin=margin(0,10,0,0)),
         axis.text = element_blank(),
@@ -62,7 +64,7 @@ ggplot() +
 
 #1. Figure 1: Study area figure----
 #Get data and wrangle for first location per tag
-dat <- read.csv("/Users/ellyknight/Documents/SMBC/Analysis/lbcu_exploration/Data/LBCUCleanedData.csv") %>% 
+dat <- read.csv("Data/LBCUCleanedData.csv") %>% 
   group_by(study, id) %>% 
   dplyr::filter(row_number()==1) %>% 
   ungroup()
@@ -88,11 +90,16 @@ dep <- dat %>%
   ungroup()
 
 #get eBird range
-ebd <- load_raster("/Users/ellyknight/Library/Application Support/ebirdst/lobcur-ERD2019-STATUS-20200930-da308f90", product="abundance_seasonal")
+# ebirdst_download_status(species = "lobcur",
+#                         download_abundance = TRUE,
+#                         download_ranges = FALSE,
+#                         force=TRUE)
+
+ebd <- load_raster("lobcur", product="abundance", period="seasonal", resolution = "3km")
 
 #wrangle eBird range - this is slow
-breed <- projectRaster(ebd$breeding, crs="+proj=longlat +datum=WGS84 +no_defs +type=crs")
-winter <- projectRaster(ebd$nonbreeding, crs="+proj=longlat +datum=WGS84 +no_defs +type=crs")
+breed <- raster(project(ebd$breeding, "EPSG:4326"))
+winter <- raster(project(ebd$nonbreeding, "EPSG:4326"))
 
 breed.pt <- breed %>% 
   aggregate(10) %>% 
@@ -116,19 +123,21 @@ plot.sa <- ggplot() +
   geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray80", colour = "gray90", size=0.3) +
   geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "white", size=0.3) +
   coord_sf(xlim=c(-129, -75), ylim=c(15, 57), expand = FALSE, crs=4326) +
-  geom_tile(data = range.pt, aes(x = x, y = y, fill=season), alpha = 1) +
+  geom_tile(data = range.pt, aes(x = x, y = y, fill=season), alpha = 1, show.legend = FALSE) +
   geom_point(data=dep, aes(x=long, y=lat, size=n), pch=21, colour="black", fill="white", alpha = 0.7) +
   xlab("") +
   ylab("") +
   map.theme +
-  theme(legend.position = "right") +
+  theme(legend.position = "none") +
+  ggtitle("Tag deployments")  +
   scale_size(range = c(2, 7), name="Individuals\ntagged") +
-  scale_fill_manual(values=c(as.character(seasons[c(1,4)]), "grey50"), name="Seasonal\nrange")
+  scale_fill_manual(values=c(as.character(seasons[c(1,4)]), "grey50"), name="Seasonal\nrange") + 
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=12))
 plot.sa
 
-ggsave(plot.sa, filename="Figs/Fig1StudyArea.jpeg", width=6, height=4)
-
-#2. Figure 2: All tracks figure----
+#Get tracking data
 raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv")
 
 #read in & wrangle data
@@ -154,24 +163,14 @@ loc.fall <- loc %>%
   dplyr::filter(season!="springmig") %>% 
   mutate(plot=paste0(id, "-", year))
 
-#define migratory divides
-div <- data.frame(div=rep(c("1-2", "2-3", "3-4", "4-5"), 2),
-         type=c(rep("start", 4), rep("end", 4)),
-         lat = c(55, 52, 54, 53,
-                 32, 22, 18, 28),
-         lon = c(-118, -113.2, -111, -104,
-                 -118, -111.2, -97, -91),
-         season = rep("season", 8))
-
 #plot spring
 plot.spring <- ggplot() +
-  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", size=0.3) +
-  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", size=0.3) +
+  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", linewidth=0.3) +
+  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", linewidth=0.3) +
   coord_sf(xlim=c(-129, -75), ylim=c(14.6, 57), expand = FALSE, crs=4326) +
   geom_line(data=loc.spring, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.2) +
   geom_point(data=loc.spring, aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
   map.theme +
-  geom_line(data=div, aes(x=lon, y=lat, group=div), linetype="dashed", size=1) +
   ggtitle("Prebreeding migration") +
   scale_fill_manual(values=as.character(seasons[c(4,3,1)])) +
   theme(axis.title.x = element_blank(),
@@ -181,13 +180,12 @@ plot.spring
 
 #plot fall
 plot.fall <- ggplot() +
-  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", size=0.3) +
-  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", size=0.3) +
+  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", linewidth=0.3) +
+  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", linewidth=0.3) +
   coord_sf(xlim=c(-129, -75), ylim=c(14.6, 57), expand = FALSE, crs=4326) +
   geom_line(data=loc.fall, aes(x=lon, y=lat, group=plot), colour="grey30", alpha = 0.2) +
   geom_point(data=loc.fall, aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
   map.theme +
-  geom_line(data=div, aes(x=lon, y=lat, group=div), linetype="dashed", size=1) +
   ggtitle("Postbreeding migration")  +
   scale_fill_manual(values=as.character(seasons[c(4,1,3)])) +
   theme(axis.title.x = element_blank(),
@@ -196,23 +194,27 @@ plot.fall <- ggplot() +
 plot.fall
 
 #make legend
-plot.legend <- ggplot() +
-  geom_point(data=sample_n(loc.fall, 100), aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
-  geom_line(data=div, aes(x=lon, y=lat, group=div, linetype=season), size=1) +
-  scale_fill_manual(values=as.character(seasons[c(4,1,3)]), name="Season", labels=c("Stationary\nnonbreeding",  "Breeding", "Migration\nstopover")) + 
-  scale_linetype_manual(values=c("dashed"), labels=c("Hypothesized\nmigratory divide"), name="") +
-  theme(legend.position = "bottom",
+
+plot.legend <- ggplot(legend.dat) +
+  geom_point(aes(x=lon, y=lat, fill=season), pch=21, colour="grey90", alpha = 0.7, size=3) +
+  geom_point(data=dep, aes(x=long, y=lat, size=n), pch=21, colour="black", fill="white", alpha = 0.7) +
+  scale_size(range = c(2, 7), name="Individuals\ntagged") +
+  scale_fill_manual(values=as.character(c(seasons[c(4,1,3)], "grey50")), name="Season", labels=c("Stationary nonbreeding",  "Breeding", "Migration stopover", "Year round")) + 
+  theme(legend.position = "right",
         legend.text=element_text(size=12),
         legend.title=element_text(size=12))
 plot.legend
-legend <- cowplot::get_legend(plot.legend)
+legend <- get_legend(plot.legend)
 
 #put together and save
-ggsave(grid.arrange(plot.spring, plot.fall, legend,
-                    heights = c(4,1),
+
+
+ggsave(grid.arrange(plot.sa, legend, plot.spring, plot.fall,
+                    heights = c(4,4),
                     widths = c(4,4),
                     layout_matrix = rbind(c(1,2),
-                                          c(3,3))), filename="Figs/Fig2Tracks.jpeg", width=6, height=4)
+                                          c(3,4))),
+       filename="Figs/Fig1SA&Tracks.jpeg", width=6, height=6.5)
 
 #3. Figure 3: Clustering figure----
 
