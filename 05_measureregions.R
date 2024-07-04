@@ -29,7 +29,7 @@ dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>%
   mutate(seasoncluster = ifelse(winter!="other", str_sub(winter, -1, -1), stopovercluster),
          seasoncluster = ifelse(is.na(seasoncluster), 0, as.numeric(seasoncluster)),
          kdeid = paste(season, id, year, seasoncluster, sep="-")) %>% 
-  left_join(clust) %>% 
+  inner_join(clust, multiple="all") %>% 
   group_by(nclust, kdeid) %>% 
   mutate(n=n()) %>% 
   ungroup() %>% 
