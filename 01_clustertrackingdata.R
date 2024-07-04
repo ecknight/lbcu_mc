@@ -8,8 +8,6 @@ library(meanShiftR)
 
 options(scipen=9999)
 
-#TO DO: CLUSTER SPATIALLY AND TAKE PROMINANT POINT ACROSS DAYS#####
-
 #1. Import data----
 raw <- read.csv("Data/LBCUMCLocations.csv")
 
