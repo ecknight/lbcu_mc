@@ -23,6 +23,9 @@ ee_check()
 # 
 # googleCloudStorageR::gcs_create_bucket("lbcu", projectId = project_id)
 
+#3. Set wd----
+setwd("G:/My Drive/SMBC")
+
 #A. INDIVIDUAL ATTRIBUTES####
 
 #1. Read in shapefile of HRs and get centroid----
@@ -35,6 +38,7 @@ kde <- read_sf("gis/shp/kde_individual.shp") %>%
 
 #2. Set up to loop through years----
 years <- sort(unique(kde$year))
+dat.out <- list()
 for(i in 1:length(years)){
   
   kde.i <- kde %>% 
@@ -59,6 +63,7 @@ for(i in 1:length(years)){
   stack <- gsw.chg$addBands(gsw.mths)$addBands(tclim.drght)$addBands(modis.crop)$addBands(modis.built)$addBands(modis.grass)$addBands(modis.wetland)$rename("change", "seasonality", "drought", "crop", "built", "grass", "wetland")
   
   #7. Set up loop for individuals----
+  stack.mn <- list()
   for(j in 1:nrow(kde.i)){
     
     #8. Get centroid and send to gee----
@@ -75,42 +80,22 @@ for(i in 1:length(years)){
     data.buff <- data$map(buffer_points)
     
     #10. Extract mean values---
-    stack.mn <- stack$reduceRegions(reducer=ee$Reducer$mean(),
-                                    collection=data.buff,
-                                    scale=30)
-    
-    #11. Export the values----
-    task_vector <- ee_table_to_gcs(collection=stack.mn,
-                                   bucket="lbcu",
-                                   fileFormat = "CSV",
-                                   fileNamePrefix = kde.j$id)
-    task_vector$start()
-    ee_monitoring(task_vector, max_attempts=1000)
-    
-    #12. Download----
-    ee_gcs_to_local(task = task_vector, dsn=paste0("gis/output_ind/", kde.j$id, ".csv"))
+    stack.mn[[j]] <- ee_extract(stack, data.buff, fun=ee$Reducer$mean(), scale = 30)
     
     print(paste0("Finished individual ", j, " of ", nrow(kde.i), " for year ", years[i]))
   }
   
+  dat.out[[i]] <- data.table::rbindlist(stack.mn, fill=TRUE)
+  
 }
 
 #13. Read in output----
-files <- list.files("gis/output_ind")
 
-dat <- data.frame()
-for(i in 1:length(files)){
-  dat <- read.csv(paste0("gis/output_ind/", files[i])) %>%
-    dplyr::select(-.geo, -system.index) %>% 
-    mutate(id = str_sub(files[i], -100, -5)) %>% 
-    rbind(dat)
-}
+dat <- do.call(rbind, dat.out)
 
 #14. Join to other data and tidy----
-covs <- dat  %>% 
-  separate(id, into=c("nclust", "group", "season", "bird", "year", "cluster"), remove=FALSE) %>% 
-  mutate(year = as.numeric(year)) %>% 
-#  mutate(id=paste(group, season, birdid, year, cluster, sep="-")) %>% 
+covs <- cbind(dat, kde)  %>% 
+  st_drop_geometry() |> 
   left_join(kde %>% 
               st_coordinates() %>% 
               data.frame() %>% 
@@ -221,6 +206,7 @@ for(i in 1:nrow(loop)){
     st_as_sf()
   
 }
+
 mcp <- do.call(rbind, mcp.list) %>% 
   separate(id, into=c("nclust", "group", "season")) |> 
   st_make_valid()
@@ -316,6 +302,7 @@ years <- pts %>%
          year.end = ifelse(season=="winter", year+1, year)) %>% 
   left_join(rad)
 
+stack.list <- list()
 for(i in 1:nrow(years)){
   
   #8. Filter points----
@@ -358,43 +345,20 @@ for(i in 1:nrow(years)){
   data.buff <- data$map(buffer_points)
   
   #15. Extract mean values---
-  stack.mn <- stack$reduceRegions(reducer=ee$Reducer$mean(),
-                                  collection=data.buff,
-                                  scale=30)
+  stack.list[[i]] <- ee_extract(stack, data.buff,
+                              fun = ee$Reducer$mean(),
+                              scale = 30) |> 
+    cbind(pts.i)
   
-  #16. Export the values----
-  task_vector <- ee_table_to_gcs(collection=stack.mn,
-                                 bucket="lbcu",
-                                 fileFormat = "CSV",
-                                 fileNamePrefix = paste0(years$year[i], "_", years$season[i], "_", years$group[i]))
-  task_vector$start()
-  ee_monitoring(task_vector, max_attempts=1000)
-  
-  #17. Download----
-  ee_gcs_to_local(task = task_vector, dsn=paste0("gis/output_rsf/", years$year[i], "_", years$season[i], "_", years$group[i], ".csv"))
-    
   print(paste0("Finished loop ", i, " of ", nrow(years)))
   
 }
 
 #19. Read in output----
-files <- list.files("gis/output_rsf")
-
-dat <- data.frame()
-for(i in 1:length(files)){
-  dat <- read.csv(paste0("gis/output_rsf/", files[i])) %>%
-    dplyr::select(-.geo) %>% 
-    mutate(id = str_sub(files[i], -100, -5)) %>% 
-    rename(index = system.index) %>% 
-    rbind(dat)
-}
+dat <- data.table::rbindlist(stack.list, fill=TRUE)
 
 #14. Join to other data and tidy----
 covs <- dat %>% 
-  separate(id, into=c("year", "season", "group"), remove=TRUE) %>% 
-  mutate(year = as.numeric(year)) %>% 
-  arrange(year, season, group, index) %>% 
-  full_join(pts) %>% 
   mutate(change = ifelse(is.na(change), 0, change),
          seasonality = ifelse(is.na(seasonality), 0, seasonality),
          crop = ifelse(is.na(crop), 0, crop),
