@@ -6,6 +6,8 @@ library(raster)
 library(lme4)
 library(MuMIn)
 
+setwd("G:/My Drive/SMBC")
+
 #A. INDIVIDUAL HOME RANGES####
 
 #1. Set number of clusters----
@@ -168,3 +170,30 @@ kd.out <- kd.sp %>%
   separate(id, into=c("nclust", "group", "season"), remove=TRUE)
 
 write_sf(kd.out, "gis/shp/kde_region.shp")
+
+#7. Save for supplementary materials----
+kd.pub <- kd.out |> 
+  mutate(Region = case_when(nclust=="3" & group==1 ~ "Intermountain",
+                            nclust=="3" & group==2 ~ "West",
+                            nclust=="3" & group==3 ~ "Plains",
+                            nclust=="flyway" & group==1 ~ "Pacific",
+                            nclust=="flyway" & group==2 ~ "Midcontinent",
+                            nclust=="expert" & group==1 ~ "West",
+                            nclust=="expert" & group==2 ~ "Intermountain",
+                            nclust=="expert" & group==3 ~ "Chihuahuan",
+                            nclust=="expert" & group==4 ~ "Gulf",
+                            group==0 ~  "No group\ndifference"),
+         Region = factor(Region, levels = c("Pacific", "Midcontinent", "West", "Intermountain",  "Chihuahuan", "Gulf", "Plains", "No group\ndifference")),
+         Approach = ifelse(nclust=="3", "clustering", nclust)) |> 
+  rename(Season = season, Area_km2  = area) |> 
+  dplyr::select(Approach, Region, Season, Area_km2)
+
+rownames(kd.pub) <- c(1:nrow(kd.pub))
+
+#check
+ggplot(kd.pub) +
+  geom_sf(aes(fill=Region)) +
+  facet_grid(Approach ~ Season)
+
+write_sf(kd.pub, "~/SMBC/lbcu_mc/GroupPolygons/LBCUGroups.shp")
+write_sf(kd.pub, "Writing/JAPL/Revision1/GroupPolygons/LBCUGroups.shp")
