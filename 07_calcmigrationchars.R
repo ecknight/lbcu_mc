@@ -10,7 +10,7 @@ options(scipen=99999)
 
 setwd("G:/My Drive/SMBC")
 
-#1. Get cluster id for each bird----
+#1. Get id for each bird----
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>%
   dplyr::filter(!is.na(X),
                 nclust == "3") |> 
@@ -42,6 +42,15 @@ dat.dur <- raw %>%
   ungroup() %>% 
   dplyr::filter(duration < 70)
 #Remove two outliers that are due to gaps in transmission
+
+ggplot(dat.dur) +
+  geom_histogram(aes(x=duration))
+
+ggplot(dat.dur) +
+  geom_histogram(aes(x=depart2))
+
+ggplot(dat.dur) +
+  geom_histogram(aes(x=arrive2))
 
 #4. Wrangle migration distance----
 
@@ -110,6 +119,9 @@ dat.rate <- dat.dist %>%
   inner_join(dat.dur) %>% 
   mutate(rate = dist/duration)
 
+ggplot(dat.rate) +
+  geom_histogram(aes(x=rate))
+
 #6. Wrangle number of stopovers/home ranges----
 dat.mig <- raw %>% 
   dplyr::filter(season %in% c("springmig", "fallmig")) %>% 
@@ -118,13 +130,7 @@ dat.mig <- raw %>%
   ungroup() %>% 
   mutate(n = ifelse(is.infinite(n), 0, n))
 
-dat.wint <- raw %>% 
-  dplyr::filter(season=="winter", winter!="wintermig") %>% 
-  mutate(year = as.numeric(ifelse(doy < 130, year-1, year)),
-         cluster = as.numeric(str_sub(winter, -1, -1))) %>% 
-  group_by(season, id, year) %>% 
-  summarize(n = max(cluster)) %>% 
-  ungroup()
+hist(dat.mig$n)
 
 #7. Wrangle stopover duration---
 dat.stop <- raw %>% 
@@ -133,6 +139,8 @@ dat.stop <- raw %>%
   group_by(id, year, season) %>% 
   summarize(n = n()) %>% 
   ungroup()
+
+hist(dat.stop$n)
 
 #8. Wrangle home range size----
 dat.hr <- read_sf("gis/shp/kde_individual.shp") |> 
@@ -152,6 +160,8 @@ dat.hr <- read_sf("gis/shp/kde_individual.shp") |>
   dplyr::filter(area < 20000) %>% 
   mutate(area.s = scale(area))
 
+hist(dat.hr$area)
+
 #9. Wrangle number of wintering home ranges----
 dat.wint <- dat.hr %>% 
   dplyr::filter(season=="winter") %>% 
@@ -160,6 +170,8 @@ dat.wint <- dat.hr %>%
             X = mean(X),
             Y = mean(Y)) %>% 
   ungroup()
+
+hist(dat.wint$n)
 
 #9. Put all the data together for plotting----
 dat.all <- dat.mig %>% 
@@ -188,6 +200,7 @@ dat.all <- dat.mig %>%
 dat.out <- read.csv("Data/LBCUKDEClusters.csv") |> 
   dplyr::filter(nclust %in% c("3", "expert", "flyway")) |> 
   dplyr::select(id, year, season, nclust, group) |> 
-  inner_join(dat.all, multiple="all")
+  inner_join(dat.all, multiple="all") |> 
+  unique()
 
 write.csv(dat.out, "Data/MovementBehaviours.csv", row.names = FALSE)
