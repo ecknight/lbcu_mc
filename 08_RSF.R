@@ -201,17 +201,14 @@ for(i in 1:nrow(loop)){
   
   dat.i <- dat |> 
     dplyr::filter(season==loop$season[i],
-                  nclust==loop$nclust[i])
+                  nclust==loop$nclust[i]) |> 
+    mutate(group = droplevels(group))
   
   newdat.crop <- expand.grid(group=unique(dat.i$group), crop=seq(0, 1, 0.01), grass=0, seasonality=0, change=0, wetland = 0)
   
   newdat.grass <- expand.grid(group=unique(dat.i$group), crop=0, grass=seq(0, 1, 0.01), seasonality=0, change=0, wetland = 0)
   
   newdat.wetland <- expand.grid(group=unique(dat.i$group), crop=0, grass=0, seasonality=0, change=0, wetland = seq(0, 1, 0.01))
-  
-  newdat.seasonality <- expand.grid(group=unique(dat.i$group), crop=0, grass=0, seasonality=seq(0, 1, 0.01), change=0, wetland = 0)
-  
-  newdat.change = expand.grid(group=unique(dat.i$group), crop=0, grass=0, seasonality=0, change=seq(0, 1, 0.01), wetland = 0)
   
   pred.crop <- predict(m.final[[i]], newdat.crop, se=TRUE, type="response")  |> 
     data.frame() |> 
@@ -229,33 +226,38 @@ for(i in 1:nrow(loop)){
     mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
            cov="grass")
   
-  pred.seasonality <- predict(m.final[[i]], newdat.seasonality, se=TRUE, type="response")  |> 
-    data.frame() |> 
-    cbind(newdat.seasonality |> 
-            dplyr::select(group, seasonality)) |> 
-    rename(val=seasonality) |> 
-    mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
-           cov="seasonality")
-  
-  pred.change <- predict(m.final[[i]], newdat.change, se=TRUE, type="response")  |> 
-    data.frame() |> 
-    cbind(newdat.change |> 
-            dplyr::select(group, change)) |> 
-    rename(val=change) |> 
-    mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
-           cov="change")
-  
-  pred.wetland <- predict(m.final[[i]], newdat.change, se=TRUE, type="response")  |> 
+  pred.wetland <- predict(m.final[[i]], newdat.wetland, se=TRUE, type="response")  |> 
     data.frame() |> 
     cbind(newdat.wetland |> 
             dplyr::select(group, wetland)) |> 
     rename(val=wetland) |> 
     mutate(up=fit+1.96*se.fit, low=fit-1.96*se.fit,
            cov="wetland")
+
+  #Remove group levels as needed
+  pick.i <- dredged.pick |> 
+    dplyr::filter(season==loop$season[i],
+                  nclust==loop$nclust[i])
+  
+  group.crop <- is.na(pick.i$crop.group)
+  group.grass <- is.na(pick.i$grass.group)
+  group.wetland <- is.na(pick.i$group.wetland)
+  
+  if(group.crop){pred.crop <- pred.crop |> 
+    mutate(group = 0) |> 
+    unique()}
+  
+  if(group.grass){pred.grass <- pred.grass |> 
+    mutate(group = 0) |> 
+    unique()}
+  
+  if(group.wetland){pred.wetland <- pred.wetland |> 
+    mutate(group = 0) |> 
+    unique()}
   
   vars.i <- vars[[i]]
   
-  pred.list[[i]] <- rbind(pred.crop, pred.grass, pred.seasonality, pred.change, pred.wetland) |> 
+  pred.list[[i]] <- rbind(pred.crop, pred.grass, pred.wetland) |> 
     mutate(season=loop$season[i],
            nclust = loop$nclust[i]) |> 
     dplyr::filter(cov %in% vars.i)
@@ -263,37 +265,29 @@ for(i in 1:nrow(loop)){
   
 }
 
-pred <- do.call(rbind, pred.list) |> 
-  # mutate(group = ifelse((season=="breed" & cov %in% c("crop", "grass")) |
-  #                          (season=="fallmig" & cov=="grass") |
-  #                          (season=="springmig" & cov=="seasonality"),
-  #                        "No group\ndifference",
-  #                        as.character(group))) |> 
-  mutate(val.use = case_when(cov=="change" ~ val*(max(dat$change.raw)-min(dat$change.raw)) + min(dat$change.raw),
-                         cov=="seasonality" ~ val*(max(dat$seasonality.raw)-min(dat$seasonality.raw)) + min(dat$seasonality.raw),
-                         !is.na(val) ~ val))
+pred <- do.call(rbind, pred.list)
 
 write.csv(pred, "Results/RSFPredictions.csv", row.names = FALSE)
 
 #12. Plot----
 plot.3 <- ggplot(pred |> 
          dplyr::filter(nclust=="3")) +
-  geom_ribbon(aes(x=val.use, ymin=low, ymax=up, group=group), alpha=0.3) +
-  geom_line(aes(x=val.use, y=fit, colour=group)) +
+  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=group), alpha=0.3) +
+  geom_line(aes(x=val, y=fit, colour=group)) +
   facet_grid(season ~ cov, scales="free") +
   theme(legend.position = "bottom")
 
 plot.expert <- ggplot(pred |> 
          dplyr::filter(nclust=="expert")) +
-  geom_ribbon(aes(x=val.use, ymin=low, ymax=up, group=group), alpha=0.3) +
-  geom_line(aes(x=val.use, y=fit, colour=group)) +
+  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=group), alpha=0.3) +
+  geom_line(aes(x=val, y=fit, colour=group)) +
   facet_grid(season ~ cov, scales="free") +
   theme(legend.position = "bottom")
 
 plot.flyway <- ggplot(pred |> 
          dplyr::filter(nclust=="flyway")) +
-  geom_ribbon(aes(x=val.use, ymin=low, ymax=up, group=group), alpha=0.3) +
-  geom_line(aes(x=val.use, y=fit, colour=group)) +
+  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=group), alpha=0.3) +
+  geom_line(aes(x=val, y=fit, colour=group)) +
   facet_grid(season ~ cov, scales="free") +
   theme(legend.position = "bottom")
 
