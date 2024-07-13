@@ -952,4 +952,51 @@ write.csv(birds, "Data/LBCUIndividualMetadata.csv", row.names = FALSE)
 
 lee <- read.csv("Data/lbcu_id_for_Elly.csv")
 
+#2. Appendix 6 - AIC results----
 
+#2a. Movement----
+dredged1 <- read.csv("Results/MigrationCharsAIC.csv")
+
+format1 <- dredged1 |> 
+  dplyr::select(nclust, mod, model, df, logLik, AICc, delta, weight) |> 
+  mutate(mod = factor(mod, levels=c("departure", "arrival", "rate", "stopover", "stopoverduration", "winterhrs", "area"), labels = c("migration departure timing", "migration arrival timing", "migration rate", "number of migration stopovers", "seasonal stopover duration", "number of nonbreeding home ranges", "natural log use of area")),
+         nclust = factor(nclust, levels = c("flyway", "expert", "3"))) |> 
+  arrange(nclust, mod, delta)
+
+write.csv(format1, "Results/MigrationCharsAIC_formatted.csv", row.names = FALSE)
+
+
+#2b.RSF----
+dredged2 <- read.csv("Results/RSFAIC.csv") |> 
+  dplyr::select(nclust, season, model, df, logLik, AICc, delta, weight) |> 
+  mutate(season = factor(season, levels=c("breed", "fallmig", "winter", "springmig"), labels = c("breeding", "postbreeding migration", "nonbreeding", "prebreeding migration")),
+         nclust = factor(nclust, levels = c("flyway", "expert", "3"))) |> 
+  arrange(nclust, season, delta)
+
+format2 <- dredged2 |> 
+  mutate(m1 = case_when(!is.na(crop.group) ~ "crop*group",
+                        is.na(crop.group) & !is.na(crop) ~ "crop",
+                        is.na(crop) ~ NA),
+         m2 = case_when(!is.na(grass.group) ~ "grass*group",
+                        is.na(grass.group) & !is.na(grass) ~ "grass",
+                        is.na(grass) ~ NA),
+         m3 = case_when(!is.na(group.wetland) ~ "wetland*group",
+                        is.na(group.wetland) & !is.na(wetland) ~ "wetland",
+                        is.na(wetland) ~ NA)) |> 
+  mutate(model = paste(m1, m2, m3, sep = " + ")) |> 
+  rowwise() |> 
+  mutate(model = str_replace_all(string = model, pattern = "NA [+] ", replacement = ""),
+         model = str_replace_all(string = model, pattern = "[+] NA", replacement = ""),
+         model = ifelse(model=="NA", "1", model)) |> 
+  dplyr::select(nclust, season, model, df, logLik, AICc, delta, weight) |> 
+  mutate(season = factor(season, levels=c("breed", "fallmig", "winter", "springmig"), labels = c("breeding", "postbreeding migration", "nonbreeding", "prebreeding migration")),
+         nclust = factor(nclust, levels = c("flyway", "expert", "3"))) |> 
+  arrange(nclust, season, delta) |> 
+  group_by(nclust, season) |> 
+  dplyr::filter(row_number() %in% c(1:5)) |> 
+  ungroup()
+
+write.csv(format2, "Results/RSFAIC_formatted.csv", row.names = FALSE)
+
+
+         
