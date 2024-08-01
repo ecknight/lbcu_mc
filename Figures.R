@@ -505,7 +505,7 @@ plot.wint
 plot.hr <- ggplot(dat %>% dplyr::filter(var=="HRarea")) +
   geom_density_ridges(aes(x=log(val), y=season, fill=Region), alpha = 0.5, scale=1) + 
   my.theme +
-  xlab("Natural log of use area") +
+  xlab(bquote(Natural~log~of~home~range~or~stopover~area~(km^2))) +
   ylab("") +
   scale_fill_manual(values=cols) +
   theme(legend.position = "none") +
