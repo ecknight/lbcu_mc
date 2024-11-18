@@ -55,29 +55,29 @@ cols <- groups[c(2,1,2,1,4,3,3)]
 
 #1. Figure 1: Study area figure----
 #Get data and wrangle for first location per tag
-dat <- read.csv("Data/LBCUCleanedData.csv") %>% 
-  group_by(study, id) %>% 
-  dplyr::filter(row_number()==1) %>% 
+dat <- read.csv("Data/LBCUCleanedData.csv") |> 
+  group_by(study, id) |> 
+  dplyr::filter(row_number()==1) |> 
   ungroup()
   
 #Get study ids
-study <- data.frame(study = unique(dat$study)) %>% 
-  arrange(study) %>% 
+study <- data.frame(study = unique(dat$study)) |> 
+  arrange(study) |> 
   mutate(studyid = c(6,4,9,7,2,3,5,1,8))
 
 #Get deployment data and match to nearest location for sample size per deployment location
-dep.raw <- read.csv("Data/DeploymentLocations.csv")%>% 
+dep.raw <- read.csv("Data/DeploymentLocations.csv")|> 
   st_as_sf(coords=c("long", "lat"), crs=4326, remove=FALSE)
 
-dep <- dat %>% 
-  mutate(deprow = dat %>% 
-           st_as_sf(coords=c("long", "lat"), crs=4326) %>% 
-           st_nearest_feature(dep.raw)) %>% 
-  dplyr::select(-long, -lat) %>% 
-  left_join(read.csv("Data/DeploymentLocations.csv") %>% 
-              mutate(deprow = row_number())) %>% 
-  group_by(studyid, long, lat) %>% 
-  summarize(n=n()) %>% 
+dep <- dat |> 
+  mutate(deprow = dat |> 
+           st_as_sf(coords=c("long", "lat"), crs=4326) |> 
+           st_nearest_feature(dep.raw)) |> 
+  dplyr::select(-long, -lat) |> 
+  left_join(read.csv("Data/DeploymentLocations.csv") |> 
+              mutate(deprow = row_number())) |> 
+  group_by(studyid, long, lat) |> 
+  summarize(n=n()) |> 
   ungroup()
 
 #get eBird range
@@ -92,19 +92,19 @@ ebd <- load_raster("lobcur", product="abundance", period="seasonal", resolution 
 breed <- raster(project(ebd$breeding, "EPSG:4326"))
 winter <- raster(project(ebd$nonbreeding, "EPSG:4326"))
 
-breed.pt <- breed %>% 
-  aggregate(10) %>% 
-  rasterToPoints(., spatial = TRUE) %>% 
-  data.frame() %>% 
+breed.pt <- breed |> 
+  aggregate(10) |> 
+  rasterToPoints(., spatial = TRUE) |> 
+  data.frame() |> 
   dplyr::filter(breeding > 0)
 
-winter.pt <- winter %>% 
-  aggregate(10) %>% 
-  rasterToPoints(., spatial = TRUE) %>% 
-  data.frame() %>% 
+winter.pt <- winter |> 
+  aggregate(10) |> 
+  rasterToPoints(., spatial = TRUE) |> 
+  data.frame() |> 
   dplyr::filter(nonbreeding > 0)
 
-range.pt <- full_join(breed.pt, winter.pt) %>% 
+range.pt <- full_join(breed.pt, winter.pt) |> 
   mutate(season = case_when(is.na(breeding) ~ "Nonbreeding",
                             is.na(nonbreeding) ~ "Breeding",
                             !is.na(breeding) & !is.na(nonbreeding) ~ "Year round"))
@@ -132,26 +132,26 @@ plot.sa
 raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv")
 
 #read in & wrangle data
-loc <- read.csv("Data/LBCUMCLocations.csv") %>% 
-  dplyr::filter(season=="winter") %>% 
+loc <- read.csv("Data/LBCUMCLocations.csv") |> 
+  dplyr::filter(season=="winter") |> 
   mutate(manual = case_when(X > -10960000 & distance < 100000 ~ 4,
                            lon < -105 & lon > -108 & distance < 10000 ~ 2,
                            lon < -108 & lon > -118 ~ 2,
                            lon < -118 ~ 1,
-                           !is.na(lon) ~ 3)) %>% 
-  dplyr::select(id, manual) %>% 
-  unique() %>% 
-  full_join(read.csv("Data/LBCUMCLocations.csv")) %>% 
-  mutate(season = factor(season, levels=c("winter", "springmig", "breed", "fallmig"))) %>% 
+                           !is.na(lon) ~ 3)) |> 
+  dplyr::select(id, manual) |> 
+  unique() |> 
+  full_join(read.csv("Data/LBCUMCLocations.csv")) |> 
+  mutate(season = factor(season, levels=c("winter", "springmig", "breed", "fallmig"))) |> 
   arrange(id, year, season, cluster)
 
 #separate into spring and fall
-loc.spring <- loc %>% 
-  dplyr::filter(season!="fallmig") %>% 
+loc.spring <- loc |> 
+  dplyr::filter(season!="fallmig") |> 
   mutate(plot=paste0(id, "-", year))
 
-loc.fall <- loc %>% 
-  dplyr::filter(season!="springmig") %>% 
+loc.fall <- loc |> 
+  dplyr::filter(season!="springmig") |> 
   mutate(plot=paste0(id, "-", year))
 
 #plot spring
@@ -221,14 +221,14 @@ clust <- read.csv("Data/LBCUKDEClusters.csv") |>
                            !is.na(group) ~ group)) |> 
   dplyr::select(-lat, -lon)
 
-clust.ll <- clust  %>% 
-  dplyr::filter(!is.na(X)) %>% 
-  st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
-  st_transform(crs=4326) %>% 
-  st_coordinates() %>% 
-  data.frame() %>% 
-  rename(lat = Y, lon = X) %>% 
-  cbind(clust %>% 
+clust.ll <- clust  |> 
+  dplyr::filter(!is.na(X)) |> 
+  st_as_sf(coords=c("X", "Y"), crs=3857) |> 
+  st_transform(crs=4326) |> 
+  st_coordinates() |> 
+  data.frame() |> 
+  rename(lat = Y, lon = X) |> 
+  cbind(clust |> 
           dplyr::filter(!is.na(X)))
 
 #write.csv(dplyr::filter(clust.ll, nclust %in% c("3", "manual")), "Data/LBCUclusterlocs.csv", row.names=FALSE)
@@ -291,14 +291,14 @@ ggsave(grid.arrange(plot.clust, plot.mc,
 #3. Trend----
 
 #3a. Read in data----
-trend.list <- read.csv("Data/LBCU_trend_gamye.csv") %>% 
-  st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
-  st_transform(crs=4326) %>% 
-  st_coordinates() %>% 
-  data.frame() %>% 
-  rename(lat = Y, lon = X) %>% 
+trend.list <- read.csv("Data/LBCU_trend_gamye.csv") |> 
+  st_as_sf(coords=c("X", "Y"), crs=3857) |> 
+  st_transform(crs=4326) |> 
+  st_coordinates() |> 
+  data.frame() |> 
+  rename(lat = Y, lon = X) |> 
   cbind(read.csv("Data/LBCU_trend_gamye.csv")) |> 
-  rename(group = knncluster) %>% 
+  rename(group = knncluster) |> 
   mutate(Region = case_when(nclust=="3" & group==1 ~ "Intermountain",
                             nclust=="3" & group==2 ~ "West",
                             nclust=="3" & group==3 ~ "Plains",
@@ -313,9 +313,9 @@ trend.list <- read.csv("Data/LBCU_trend_gamye.csv") %>%
                          labels = c("Flyway", "Expert", "Clustering")))
 
 
-trend <- trend.list %>% 
-  dplyr::select(nclust, Region, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
-  unique() %>% 
+trend <- trend.list |> 
+  dplyr::select(nclust, Region, Trend, 'Trend_Q0.025', 'Trend_Q0.975') |> 
+  unique() |> 
   rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025') |> 
   mutate(wd = case_when(nclust=="Clustering" ~ 0.45,
                         nclust=="Expert" ~ 0.6,
@@ -324,20 +324,20 @@ trend <- trend.list %>%
 #trend$Region <- factor(trend$Region, levels=c("West", "Intermountain", "Plains"))
 
 #3b. BBS Regions----
-clust.raw <- read.csv("Data/LBCUKDEClusters.csv") %>% 
+clust.raw <- read.csv("Data/LBCUKDEClusters.csv") |> 
   dplyr::filter(season=="breed", nclust %in% c("3", "expert", "flyway"))
 
-clust <-  clust.raw %>% 
-  group_by(nclust, id, group) %>%
-  summarize(n=n()) %>% 
-  group_by(id) %>% 
-  dplyr::filter(n == max(n)) %>% 
-  ungroup() %>% 
-  left_join(clust.raw) %>% 
-  group_by(nclust, id, group) %>%
+clust <-  clust.raw |> 
+  group_by(nclust, id, group) |>
+  summarize(n=n()) |> 
+  group_by(id) |> 
+  dplyr::filter(n == max(n)) |> 
+  ungroup() |> 
+  left_join(clust.raw) |> 
+  group_by(nclust, id, group) |>
   summarize(lat=mean(lat),
-            lon=mean(lon))  %>% 
-  ungroup() %>% 
+            lon=mean(lon))  |> 
+  ungroup() |> 
   mutate(Region = case_when(nclust=="3" & group==1 ~ "Intermountain",
                             nclust=="3" & group==2 ~ "West",
                             nclust=="3" & group==3 ~ "Plains",
@@ -350,8 +350,8 @@ clust <-  clust.raw %>%
          Region = factor(Region, levels = c("Pacific", "West", "Intermountain", "Midcontinent", "Chihuahuan", "Gulf", "Plains")))  |> 
   mutate(nclust = factor(nclust, levels = c("flyway", "expert", "3"),
                          labels = c("Flyway", "Expert", "Clustering"))) |> 
-  left_join(trend %>% 
-              dplyr::select(nclust, Region, Trend) %>% 
+  left_join(trend |> 
+              dplyr::select(nclust, Region, Trend) |> 
               unique())
 
 plot.map <- ggplot(trend.list) +
@@ -416,7 +416,7 @@ dat <- read.csv("Data/MovementBehaviours.csv") |>
                          labels = c("Flyway", "Expert", "Clustering")))
 
 #4b. Departure----
-plot.dep <- ggplot(dat %>% dplyr::filter(var=="depart")) +
+plot.dep <- ggplot(dat |> dplyr::filter(var=="depart")) +
   geom_density_ridges(aes(x=val, y=season, fill=Region), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Day of migration departure season") +
@@ -430,7 +430,7 @@ plot.dep <- ggplot(dat %>% dplyr::filter(var=="depart")) +
 plot.dep
 
 #4c. Arrival----
-plot.arr <- ggplot(dat %>% dplyr::filter(var=="arrive")) +
+plot.arr <- ggplot(dat |> dplyr::filter(var=="arrive")) +
   geom_density_ridges(aes(x=val, y=season, fill=Region), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Day of migration arrival season") +
@@ -445,7 +445,7 @@ plot.arr <- ggplot(dat %>% dplyr::filter(var=="arrive")) +
 plot.arr
 
 #4d. Rate----
-plot.rate <- ggplot(dat %>% dplyr::filter(var=="rate")) +
+plot.rate <- ggplot(dat |> dplyr::filter(var=="rate")) +
   geom_density_ridges(aes(x=val/100, y=season, fill=Region), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Migration rate (100 km/day)") +
@@ -459,7 +459,7 @@ plot.rate <- ggplot(dat %>% dplyr::filter(var=="rate")) +
 plot.rate
 
 #4e. Stopovers----
-plot.stop <- ggplot(dat %>% dplyr::filter(var=="Stopovers")) +
+plot.stop <- ggplot(dat |> dplyr::filter(var=="Stopovers")) +
   geom_density_ridges(aes(x=val, y=season, fill=Region), alpha = 0.5, stat="binline", position=position_dodge(width=1), scale=1) + 
   my.theme +
   xlab("Number of migration stopovers") +
@@ -473,7 +473,7 @@ plot.stop <- ggplot(dat %>% dplyr::filter(var=="Stopovers")) +
 plot.stop
 
 #4f. Stopover duration----
-plot.stopdur <- ggplot(dat %>% dplyr::filter(var=="stopoverduration")) +
+plot.stopdur <- ggplot(dat |> dplyr::filter(var=="stopoverduration")) +
   geom_density_ridges(aes(x=val, y=season, fill=Region), alpha = 0.5, scale=1) + 
   my.theme +
   xlab("Total days of migration stopover") +
@@ -487,7 +487,7 @@ plot.stopdur <- ggplot(dat %>% dplyr::filter(var=="stopoverduration")) +
 plot.stopdur
 
 #4g. Number of wintering ranges----
-plot.wint <- ggplot(dat %>% dplyr::filter(var=="WinterHRs")) +
+plot.wint <- ggplot(dat |> dplyr::filter(var=="WinterHRs")) +
   geom_density_ridges(aes(x=val, y=season, fill=Region), alpha = 0.5, stat="binline", position=position_dodge(width=0.8), scale=1) + 
   my.theme +
   xlab("Number of wintering home ranges") +
@@ -502,7 +502,7 @@ plot.wint <- ggplot(dat %>% dplyr::filter(var=="WinterHRs")) +
 plot.wint
 
 #4h. Range area----
-plot.hr <- ggplot(dat %>% dplyr::filter(var=="HRarea")) +
+plot.hr <- ggplot(dat |> dplyr::filter(var=="HRarea")) +
   geom_density_ridges(aes(x=log(val), y=season, fill=Region), alpha = 0.5, scale=1) + 
   my.theme +
   xlab(bquote(Natural~log~of~home~range~or~stopover~area~(km^2))) +
@@ -648,25 +648,25 @@ ggsave(plot.covs, filename="Figs/Fig5RSF.jpeg", width = 12, height=5)
 #8. SUMMARY STATS####
 
 #8a. Dataset----
-raw.raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
+raw.raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") |> 
   dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872))
 
-locs.raw <- read.csv("Data/LBCUMCLocations.csv") %>% 
+locs.raw <- read.csv("Data/LBCUMCLocations.csv") |> 
   dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872))
 
-locs.n <-locs.raw  %>% 
-  dplyr::filter(season %in% c("breed", "winter")) %>% 
-  group_by(id, season) %>% 
-  summarize(n=n()) %>% 
-  group_by(id) %>% 
-  summarize(n=n()) %>% 
-  dplyr::filter(n==2) %>% 
+locs.n <-locs.raw  |> 
+  dplyr::filter(season %in% c("breed", "winter")) |> 
+  group_by(id, season) |> 
+  summarize(n=n()) |> 
+  group_by(id) |> 
+  summarize(n=n()) |> 
+  dplyr::filter(n==2) |> 
   ungroup()
 
-locs <- locs.raw %>% 
+locs <- locs.raw |> 
   dplyr::filter(id %in% locs.n$id)
 
-raw <- raw.raw %>% 
+raw <- raw.raw |> 
   dplyr::filter(id %in% locs.n$id)
 
 #Number of locations
@@ -679,10 +679,10 @@ length(unique(locs$id))
 nrow(raw)/365
 
 #Years of tracking per individual
-raw %>% 
-  group_by(id) %>% 
-  summarize(n=n()) %>% 
-  ungroup() %>% 
+raw |> 
+  group_by(id) |> 
+  summarize(n=n()) |> 
+  ungroup() |> 
   summarize(mean = mean(n),
             sd = sd(n),
             mean.yr = mean/365,
@@ -693,9 +693,9 @@ raw %>%
             min.yr = min/365)
 
 #Histogram of tracking years
-years <- raw %>% 
-  group_by(id) %>% 
-  summarize(n=n()/365) %>% 
+years <- raw |> 
+  group_by(id) |> 
+  summarize(n=n()/365) |> 
   ungroup()
   
 
@@ -703,12 +703,12 @@ years <- raw %>%
 table(locs$season)
 
 #Number of individuals with spring & fall mig stopovers
-locs %>% 
-  dplyr::filter(season%in%c("springmig", "fallmig")) %>% 
-  dplyr::select(season, id) %>% 
-  unique() %>% 
-  group_by(season) %>% 
-  summarize(n=n()) %>% 
+locs |> 
+  dplyr::filter(season%in%c("springmig", "fallmig")) |> 
+  dplyr::select(season, id) |> 
+  unique() |> 
+  group_by(season) |> 
+  summarize(n=n()) |> 
   ungroup()
 
 #8b. Clustering----
@@ -719,39 +719,39 @@ table(clust.raw$nclust, clust.raw$group)
 #8c. MC----
 mc.raw <- read.csv("Data/LBCUMigConnectivity.csv")
 
-mc.raw %>% 
+mc.raw |> 
   summarize(MC = mean(MC), 
             MClow = mean(MClow),
             MChigh = mean(MChigh))
 
 #by strategy
-mc.raw %>% 
-  mutate(strategy = ifelse(nclust %in% c("expert", "flyway"), nclust, "kmeans")) %>% 
-  group_by(strategy) %>% 
+mc.raw |> 
+  mutate(strategy = ifelse(nclust %in% c("expert", "flyway"), nclust, "kmeans")) |> 
+  group_by(strategy) |> 
   summarize(MC = mean(MC), 
             MClow = mean(MClow),
             MChigh = mean(MChigh))
 
 #across seasons
-mc.raw %>% 
-  group_by(originseason, targetseason) %>% 
+mc.raw |> 
+  group_by(originseason, targetseason) |> 
   summarize(MC = mean(MC),
             MClow = mean(MClow),
             MChigh = mean(MChigh))
 
 #for each number of clusters by season
-mc.raw %>% 
-  group_by(originseason, targetseason, nclust) %>% 
+mc.raw |> 
+  group_by(originseason, targetseason, nclust) |> 
   summarize(MC = mean(MC),
             MClow = mean(MClow),
-            MChigh = mean(MChigh)) %>% 
-  ungroup() %>% 
-  arrange(originseason, targetseason, -MC) %>% 
+            MChigh = mean(MChigh)) |> 
+  ungroup() |> 
+  arrange(originseason, targetseason, -MC) |> 
   View()
 
 #across number of clusters
-mc.raw %>% 
-  group_by(nclust) %>% 
+mc.raw |> 
+  group_by(nclust) |> 
   summarize(MC = mean(MC),
             MClow = mean(MClow),
             MChigh = mean(MChigh))
@@ -761,21 +761,21 @@ clust <- read.csv("Data/LBCUBBSClusters.csv")
 
 load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
 
-bird <- bbs_data[["bird"]] %>% 
-  mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
+bird <- bbs_data[["bird"]] |> 
+  mutate(id = paste(countrynum, statenum, Route, sep="-")) |> 
   dplyr::filter(id %in% clust$id,
-                AOU==2640) %>% 
+                AOU==2640) |> 
   mutate(rt.uni=paste(statenum, Route, sep="-"),
          rt.uni.y=paste(rt.uni, Year, sep="-"))
 
-route <- bbs_data[["route"]] %>% 
-  mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-  inner_join(clust) %>% 
-  dplyr::filter(Year >= 1970) %>% 
+route <- bbs_data[["route"]] |> 
+  mutate(id = paste(countrynum, statenum, Route, sep="-")) |> 
+  inner_join(clust) |> 
+  dplyr::filter(Year >= 1970) |> 
   mutate(strat_name=knncluster,
          rt.uni=paste(statenum, Route, sep="-"),
-         rt.uni.y=paste(rt.uni, Year, sep="-")) %>% 
-  left_join(bird) %>% 
+         rt.uni.y=paste(rt.uni, Year, sep="-")) |> 
+  left_join(bird) |> 
   mutate(SpeciesTotal = ifelse(is.na(SpeciesTotal), 0, SpeciesTotal))
 
 #Number of routes
@@ -817,56 +817,56 @@ dat.all <- read.csv("Data/MovementBehaviours.csv") |>
          Region = factor(Region, levels = c("Pacific", "Midcontinent", "West", "Intermountain",  "Chihuahuan", "Gulf", "Plains")))
 
 #Departure
-dat.all %>%
-  dplyr::filter(var=="depart2") %>% 
-  group_by(season, nclust, Region) %>% 
+dat.all |>
+  dplyr::filter(var=="depart2") |> 
+  group_by(season, nclust, Region) |> 
   summarize(depart= mean(val))
 
 #Arrival
-dat.all %>%
-  dplyr::filter(var=="arrive2") %>% 
-  group_by(season, nclust, Region) %>% 
+dat.all |>
+  dplyr::filter(var=="arrive2") |> 
+  group_by(season, nclust, Region) |> 
   summarize(depart= mean(val))
 
 #Stopovers
-dat.all %>%
-  dplyr::filter(var=="Stopovers") %>% 
-  group_by(season, nclust, Region) %>% 
+dat.all |>
+  dplyr::filter(var=="Stopovers") |> 
+  group_by(season, nclust, Region) |> 
   summarize(depart= mean(val))
 
 #Stopover days
-dat.all %>%
-  dplyr::filter(var=="stopoverduration") %>% 
-  group_by(season) %>% 
+dat.all |>
+  dplyr::filter(var=="stopoverduration") |> 
+  group_by(season) |> 
   summarize(stopovers= mean(val))
 
 #Rate
-dat.all %>%
-  dplyr::filter(var=="rate") %>% 
-  group_by(season, nclust, Region) %>% 
+dat.all |>
+  dplyr::filter(var=="rate") |> 
+  group_by(season, nclust, Region) |> 
   summarize(depart= mean(val))
 
 #Areas
-dat.all %>%
-  dplyr::filter(var=="HRarea") %>% 
-  group_by(season, nclust, Region) %>% 
+dat.all |>
+  dplyr::filter(var=="HRarea") |> 
+  group_by(season, nclust, Region) |> 
   summarize(depart= mean(val)) |> 
   View()
 
 #number of wintering home ranges
-dat.all %>%
-  dplyr::filter(var=="WinterHRs") %>% 
-  group_by(season, nclust, Region) %>% 
+dat.all |>
+  dplyr::filter(var=="WinterHRs") |> 
+  group_by(season, nclust, Region) |> 
   summarize(depart= mean(val))
 
 
 #Distance between wintering hrs
-kd.wint <- read_sf("gis/shp/kde_individual.shp") %>% 
-  dplyr::filter(season=="winter") %>% 
-  st_make_valid() %>% 
-  st_centroid() %>% 
-  st_transform(crs=3857) %>% 
-  mutate(id = paste0(bird, "-", year, "", season)) %>% 
+kd.wint <- read_sf("gis/shp/kde_individual.shp") |> 
+  dplyr::filter(season=="winter") |> 
+  st_make_valid() |> 
+  st_centroid() |> 
+  st_transform(crs=3857) |> 
+  mutate(id = paste0(bird, "-", year, "", season)) |> 
   arrange(id, cluster)
 
 kd.xy <- st_coordinates(kd.wint)
@@ -878,14 +878,14 @@ traj <- as.ltraj(xy=kd.xy[,c("X", "Y")],
                  proj4string = CRS("+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"))
 names(traj) <- unique(kd.wint$id)
 
-dat.traj <- rbindlist(traj, idcol=TRUE) %>% 
-  rename(id='.id', X=x, Y=y) %>% 
-  mutate(id=as.numeric(id)) %>% 
-  arrange(id, date) %>% 
-  dplyr::select(dist) %>% 
-  cbind(kd.wint) %>% 
-  dplyr::filter(!is.na(dist)) %>% 
-  mutate(dist = dist/1000) %>% 
+dat.traj <- rbindlist(traj, idcol=TRUE) |> 
+  rename(id='.id', X=x, Y=y) |> 
+  mutate(id=as.numeric(id)) |> 
+  arrange(id, date) |> 
+  dplyr::select(dist) |> 
+  cbind(kd.wint) |> 
+  dplyr::filter(!is.na(dist)) |> 
+  mutate(dist = dist/1000) |> 
   mutate(region = case_when(kdecluster==2 ~ "West", 
                             kdecluster==1 ~ "Intermountain",
                             kdecluster==3 ~ "Plains"))
@@ -900,23 +900,23 @@ ggsave(filename="Figs/WinteringHomeRangeDistances.jpeg", width = 3, height = 3)
 locs <- read.csv("Data/LBCUMCLocations.csv")
 dat <- read.csv("Data/LBCU_FilteredData_Segmented.csv")
 
-locs.n <-locs.raw  %>% 
-  dplyr::filter(season %in% c("breed", "winter")) %>% 
-  group_by(id, season) %>% 
-  summarize(n=n()) %>% 
-  group_by(id) %>% 
-  summarize(n=n()) %>% 
-  dplyr::filter(n==2) %>% 
+locs.n <-locs.raw  |> 
+  dplyr::filter(season %in% c("breed", "winter")) |> 
+  group_by(id, season) |> 
+  summarize(n=n()) |> 
+  group_by(id) |> 
+  summarize(n=n()) |> 
+  dplyr::filter(n==2) |> 
   ungroup()
 
-individuals <- locs.n %>% 
-  dplyr::select(id) %>% 
-  unique() %>% 
-  left_join(dat %>% 
-              mutate(date = lubridate::ymd_hms(date)) %>% 
-              group_by(study, id, sensor, sex) %>% 
+individuals <- locs.n |> 
+  dplyr::select(id) |> 
+  unique() |> 
+  left_join(dat |> 
+              mutate(date = lubridate::ymd_hms(date)) |> 
+              group_by(study, id, sensor, sex) |> 
               summarize(start = min(date),
-                        end = max(date)) %>% 
+                        end = max(date)) |> 
               ungroup())
 
 write.csv(individuals, "Data/LBCUIndividualsIncluded.csv", row.names = FALSE)
@@ -924,14 +924,14 @@ write.csv(individuals, "Data/LBCUIndividualsIncluded.csv", row.names = FALSE)
 #APPENDICES####
 
 #1. Appendix 1: Deployment metadata----
-birds <- read.csv("Data/LBCUMCLocations.csv") %>% 
-  group_by(study, id, year) %>% 
-  summarize(days=sum(days)) %>% 
-  group_by(study, id) %>% 
+birds <- read.csv("Data/LBCUMCLocations.csv") |> 
+  group_by(study, id, year) |> 
+  summarize(days=sum(days)) |> 
+  group_by(study, id) |> 
   summarize(startyear = min(year),
             endyear = max(year),
-           days = sum(days)) %>% 
-  ungroup() %>% 
+           days = sum(days)) |> 
+  ungroup() |> 
   mutate(use = ifelse(id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872), "No", "Yes"), 
          studyid = case_when(study=="BC" ~ 6,
                              study=="IW" ~ 4,
@@ -941,11 +941,11 @@ birds <- read.csv("Data/LBCUMCLocations.csv") %>%
                              study=="NB" ~ 3,
                              study=="TX" ~ 5,
                              study=="USGS" ~ 1,
-                             study=="WY" ~ 8)) %>% 
-  dplyr::select(studyid, id, startyear, endyear, days, use) %>% 
-  arrange(studyid, id) %>% 
-  left_join(read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-                       dplyr::select(id, sex) %>% 
+                             study=="WY" ~ 8)) |> 
+  dplyr::select(studyid, id, startyear, endyear, days, use) |> 
+  arrange(studyid, id) |> 
+  left_join(read.csv("Data/LBCU_FilteredData_Segmented.csv") |> 
+                       dplyr::select(id, sex) |> 
                        unique())
 
 write.csv(birds, "Data/LBCUIndividualMetadata.csv", row.names = FALSE)
@@ -998,5 +998,102 @@ format2 <- dredged2 |>
 
 write.csv(format2, "Results/RSFAIC_formatted.csv", row.names = FALSE)
 
+#GRAPHICAL ABSTRACT###########
 
-         
+#1. Get tracking data----
+loc <- read.csv("Data/LBCUMCLocations.csv") |> 
+  dplyr::filter(season=="winter") |> 
+  mutate(manual = case_when(X > -10960000 & distance < 100000 ~ 4,
+                            lon < -105 & lon > -108 & distance < 10000 ~ 2,
+                            lon < -108 & lon > -118 ~ 2,
+                            lon < -118 ~ 1,
+                            !is.na(lon) ~ 3)) |> 
+  dplyr::select(id, manual) |> 
+  unique() |> 
+  full_join(read.csv("Data/LBCUMCLocations.csv")) |> 
+  mutate(season = factor(season, levels=c("winter", "springmig", "breed", "fallmig"))) |> 
+  dplyr::filter(season %in% c("breed", "winter")) |> 
+  arrange(id, year, season, cluster) 
+
+#2. Get trend data & wrangle----
+trend.list <- read.csv("Data/LBCU_trend_gamye.csv") |> 
+  st_as_sf(coords=c("X", "Y"), crs=3857) |> 
+  st_transform(crs=4326) |> 
+  st_coordinates() |> 
+  data.frame() |> 
+  rename(lat = Y, lon = X) |> 
+  cbind(read.csv("Data/LBCU_trend_gamye.csv")) |> 
+  rename(group = knncluster) |> 
+  mutate(Region = case_when(nclust=="3" & group==1 ~ "Intermountain",
+                            nclust=="3" & group==2 ~ "West",
+                            nclust=="3" & group==3 ~ "Plains",
+                            nclust=="flyway" & group==1 ~ "Pacific",
+                            nclust=="flyway" & group==2 ~ "Midcontinent",
+                            nclust=="expert" & group==1 ~ "West",
+                            nclust=="expert" & group==2 ~ "Intermountain",
+                            nclust=="expert" & group==3 ~ "Chihuahuan",
+                            nclust=="expert" & group==4 ~ "Gulf"),
+         Region = factor(Region, levels = c("Pacific", "West", "Intermountain", "Midcontinent", "Chihuahuan", "Gulf", "Plains")))  |> 
+  mutate(nclust = factor(nclust, levels = c("flyway", "expert", "3"),
+                         labels = c("Flyway (2 groups)", "Expert knowledge (4 groups)", "Unsupervised clustering (3 groups)")))
+
+trend <- trend.list |> 
+  dplyr::select(nclust, Region, Trend, 'Trend_Q0.025', 'Trend_Q0.975') |> 
+  unique() |> 
+  rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025') |> 
+  mutate(wd = case_when(nclust=="Clustering" ~ 0.45,
+                        nclust=="Expert" ~ 0.6,
+                        nclust=="Flyway" ~ 0.3))
+
+clust <-  read.csv("Data/LBCUKDEClusters.csv") |> 
+  dplyr::filter(season=="breed", nclust %in% c("3", "expert", "flyway")) |> 
+  group_by(nclust, id, group) |>
+  summarize(n=n()) |> 
+  group_by(id) |> 
+  dplyr::filter(n == max(n)) |> 
+  ungroup() |> 
+  left_join(clust.raw) |> 
+  group_by(nclust, id, group) |>
+  summarize(lat=mean(lat),
+            lon=mean(lon))  |> 
+  ungroup() |> 
+  mutate(Region = case_when(nclust=="3" & group==1 ~ "Intermountain",
+                            nclust=="3" & group==2 ~ "West",
+                            nclust=="3" & group==3 ~ "Plains",
+                            nclust=="flyway" & group==1 ~ "Pacific",
+                            nclust=="flyway" & group==2 ~ "Midcontinent",
+                            nclust=="expert" & group==1 ~ "West",
+                            nclust=="expert" & group==2 ~ "Intermountain",
+                            nclust=="expert" & group==3 ~ "Chihuahuan",
+                            nclust=="expert" & group==4 ~ "Gulf"),
+         Region = factor(Region, levels = c("Pacific", "West", "Intermountain", "Midcontinent", "Chihuahuan", "Gulf", "Plains")))  |> 
+  mutate(nclust = factor(nclust, levels = c("flyway", "expert", "3"),
+                         labels = c("Flyway (2 groups)", "Expert knowledge (4 groups)", "Unsupervised clustering (3 groups)"))) |> 
+  left_join(trend |> 
+              dplyr::select(nclust, Region, Trend) |> 
+              unique())
+
+#3. Put together----
+all <- inner_join(loc, clust |> 
+                    dplyr::select(-lat, -lon),
+                  multiple="all")
+
+#4. Plot maps----
+ggplot(all) + 
+  geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", linewidth=0.3) +
+  geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", linewidth=0.3) +
+  coord_sf(xlim=c(-129, -75), ylim=c(14.6, 57), expand = FALSE, crs=4326) +
+  geom_line(data=all, aes(x=lon, y=lat, group=id), colour="grey30", alpha = 0.2) +
+  geom_point(data=all, aes(x=lon, y=lat, fill=Trend), pch=21, colour="grey30", size=3) +
+  map.theme +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"), 
+        strip.text = element_text(size=12),
+        legend.position = "bottom",
+        panel.spacing = unit(0.5, "lines")) +
+  ggtitle("Approaches for delineating of groups for annual cycle management of long-billed curlew") +
+  facet_wrap(~nclust) +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue", midpoint = 0, name="Population\ntrend")
+
+ggsave(filename="Figs/GraphicalAbstractFig_Legend.jpeg", width=10, height=4.5)
