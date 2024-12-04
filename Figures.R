@@ -1033,9 +1033,7 @@ trend.list <- read.csv("Data/LBCU_trend_gamye.csv") |>
                             nclust=="expert" & group==2 ~ "Intermountain",
                             nclust=="expert" & group==3 ~ "Chihuahuan",
                             nclust=="expert" & group==4 ~ "Gulf"),
-         Region = factor(Region, levels = c("Pacific", "West", "Intermountain", "Midcontinent", "Chihuahuan", "Gulf", "Plains")))  |> 
-  mutate(nclust = factor(nclust, levels = c("flyway", "expert", "3"),
-                         labels = c("Flyway (2 groups)", "Expert knowledge (4 groups)", "Unsupervised clustering (3 groups)")))
+         Region = factor(Region, levels = c("Pacific", "West", "Intermountain", "Midcontinent", "Chihuahuan", "Gulf", "Plains")))
 
 trend <- trend.list |> 
   dplyr::select(nclust, Region, Trend, 'Trend_Q0.025', 'Trend_Q0.975') |> 
@@ -1045,14 +1043,16 @@ trend <- trend.list |>
                         nclust=="Expert" ~ 0.6,
                         nclust=="Flyway" ~ 0.3))
 
-clust <-  read.csv("Data/LBCUKDEClusters.csv") |> 
+clust.raw <- read.csv("Data/LBCUKDEClusters.csv")
+
+clust <-  clust.raw |> 
   dplyr::filter(season=="breed", nclust %in% c("3", "expert", "flyway")) |> 
   group_by(nclust, id, group) |>
   summarize(n=n()) |> 
   group_by(id) |> 
   dplyr::filter(n == max(n)) |> 
   ungroup() |> 
-  left_join(clust.raw) |> 
+  left_join(clust.raw, multiple="all") |> 
   group_by(nclust, id, group) |>
   summarize(lat=mean(lat),
             lon=mean(lon))  |> 
@@ -1067,11 +1067,11 @@ clust <-  read.csv("Data/LBCUKDEClusters.csv") |>
                             nclust=="expert" & group==3 ~ "Chihuahuan",
                             nclust=="expert" & group==4 ~ "Gulf"),
          Region = factor(Region, levels = c("Pacific", "West", "Intermountain", "Midcontinent", "Chihuahuan", "Gulf", "Plains")))  |> 
-  mutate(nclust = factor(nclust, levels = c("flyway", "expert", "3"),
-                         labels = c("Flyway (2 groups)", "Expert knowledge (4 groups)", "Unsupervised clustering (3 groups)"))) |> 
   left_join(trend |> 
               dplyr::select(nclust, Region, Trend) |> 
-              unique())
+              unique()) |> 
+  mutate(nclust = factor(nclust, levels = c("flyway", "expert", "3"),
+                         labels = c("Based on migratory flyway\n(2 groups)", "From expert knowledge\n(4 groups)", "Unsupervised clustering of\nmovement paths (3 groups)")))
 
 #3. Put together----
 all <- inner_join(loc, clust |> 
@@ -1082,7 +1082,7 @@ all <- inner_join(loc, clust |>
 ggplot(all) + 
   geom_polygon(data=country, aes(x=long, y=lat, group=group), fill="gray90", colour = "gray70", linewidth=0.3) +
   geom_polygon(data=lake, aes(x=long, y=lat, group=group), fill="white", colour = "grey70", linewidth=0.3) +
-  coord_sf(xlim=c(-129, -75), ylim=c(14.6, 57), expand = FALSE, crs=4326) +
+  coord_sf(xlim=c(-128, -92), ylim=c(19, 57), expand = FALSE, crs=4326) +
   geom_line(data=all, aes(x=lon, y=lat, group=id), colour="grey30", alpha = 0.2) +
   geom_point(data=all, aes(x=lon, y=lat, fill=Trend), pch=21, colour="grey30", size=3) +
   map.theme +
@@ -1092,7 +1092,7 @@ ggplot(all) +
         strip.text = element_text(size=12),
         legend.position = "bottom",
         panel.spacing = unit(0.5, "lines")) +
-  ggtitle("Approaches for delineating of groups for annual cycle management of long-billed curlew") +
+#  ggtitle("Approaches for delineating of groups for annual cycle management of long-billed curlew") +
   facet_wrap(~nclust) +
   scale_fill_gradient2(low = "red", mid = "white", high = "blue", midpoint = 0, name="Population\ntrend")
 
