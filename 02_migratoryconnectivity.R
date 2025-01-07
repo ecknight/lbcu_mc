@@ -12,9 +12,10 @@ library(ebirdst)
 dat <- read.csv("Data/LBCUKDEClusters.csv")
 
 #2. Extract relative abundance information from eBird----
-#set_ebirdst_access_key("e7ld1bagh8n1")
-#ebirdst_download("lobcur")
-ebd <- load_raster("/Users/ellyknight/Library/Application Support/ebirdst/lobcur-ERD2019-STATUS-20200930-da308f90", product="abundance_seasonal")
+#FILL IN EBIRD ACCESS KEY AND RASTER FILE PATH BELOW
+set_ebirdst_access_key("")
+ebirdst_download("lobcur")
+ebd <- load_raster("lobcur-ERD2019-STATUS-20200930-da308f90", product="abundance_seasonal")
 
 dat.sf <- dat %>% 
   st_as_sf(coords=c("X", "Y"), crs=3857) %>% 
@@ -764,13 +765,13 @@ for(j in 1:length(clusters)){
 write.csv(mc.df, "Data/LBCUMigConnectivity.csv", row.names = FALSE)
 mc.df <- read.csv("Data/LBCUMigConnectivity.csv")
 
-#13. MC per season----
+#13. Summarize MC per season----
 ggplot(mc.df) +
   geom_point(aes(x=nclust, y=MC)) +
   geom_errorbar(aes(x=nclust, ymin = MClow, ymax = MChigh)) +
   facet_grid(originseason ~ targetseason, scales="free")
 
-#14. MC winner----
+#14. Determine overall MC----
 mc.sum <- mc.df %>% 
   group_by(nclust) %>% 
   summarize(MCmean = mean(MC),

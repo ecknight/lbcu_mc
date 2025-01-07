@@ -2,12 +2,7 @@ library(tidyverse)
 library(usdm)
 library(lme4)
 library(MuMIn)
-library(ggridges)
 library(mgcv)
-
-options(scipen=99999)
-
-setwd("G:/My Drive/SMBC")
 
 #1. Load data----
 raw <- read.csv("Data/LBCU_environvars_RSF.csv") 
@@ -49,24 +44,13 @@ v <- do.call(rbind, v.list) |>
 #Check for sufficient distribution
 #Check for polynomials
 
-#wetland change
-ggplot(dat) +
-  geom_histogram(aes(x=change, colour=group)) +
-  facet_wrap(nclust~season, scales="free")
-
-ggplot(dat) +
-#  geom_jitter(aes(x=change, y=response, colour=group)) +
-  geom_smooth(aes(x=change, y=response, colour=group)) +
-  facet_wrap(nclust~season)
-#maybe for winter
-
 #crop
 ggplot(dat) +
   geom_histogram(aes(x=crop, colour=group)) +
   facet_wrap(nclust~season, scales="free")
 
 ggplot(dat) +
-#  geom_jitter(aes(x=crop, y=response, colour=group)) +
+  geom_jitter(aes(x=crop, y=response, colour=group)) +
   geom_smooth(aes(x=crop, y=response, colour=group)) +
   facet_wrap(nclust~season)
 
@@ -76,19 +60,9 @@ ggplot(dat) +
   facet_wrap(nclust~season, scales="free")
 
 ggplot(dat) +
-#  geom_jitter(aes(x=grass, y=response, colour=group)) +
+  geom_jitter(aes(x=grass, y=response, colour=group)) +
   geom_smooth(aes(x=grass, y=response, colour=group)) +
   facet_wrap(nclust~season)
-
-#seasonality
-ggplot(dat) +
-  geom_histogram(aes(x=seasonality, colour=group)) +
-  facet_wrap(nclust~season, scales="free")
-
-ggplot(dat) +
-#  geom_jitter(aes(x=seasonality, y=response, colour=group)) +
-  geom_smooth(aes(x=seasonality, y=response, colour=group)) +
-  facet_grid(nclust~season)
 
 #wetland
 ggplot(dat) +
@@ -96,10 +70,9 @@ ggplot(dat) +
   facet_wrap(nclust~season, scales="free")
 
 ggplot(dat) +
-  #  geom_jitter(aes(x=wetland, y=response, colour=group)) +
+    geom_jitter(aes(x=wetland, y=response, colour=group)) +
   geom_smooth(aes(x=wetland, y=response)) +
   facet_grid(nclust~season)
-
 
 #4. Set up loop----
 loop <- dat |> 
@@ -268,27 +241,3 @@ for(i in 1:nrow(loop)){
 pred <- do.call(rbind, pred.list)
 
 write.csv(pred, "Results/RSFPredictions.csv", row.names = FALSE)
-
-#12. Plot----
-plot.3 <- ggplot(pred |> 
-         dplyr::filter(nclust=="3")) +
-  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=group), alpha=0.3) +
-  geom_line(aes(x=val, y=fit, colour=group)) +
-  facet_grid(season ~ cov, scales="free") +
-  theme(legend.position = "bottom")
-
-plot.expert <- ggplot(pred |> 
-         dplyr::filter(nclust=="expert")) +
-  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=group), alpha=0.3) +
-  geom_line(aes(x=val, y=fit, colour=group)) +
-  facet_grid(season ~ cov, scales="free") +
-  theme(legend.position = "bottom")
-
-plot.flyway <- ggplot(pred |> 
-         dplyr::filter(nclust=="flyway")) +
-  geom_ribbon(aes(x=val, ymin=low, ymax=up, group=group), alpha=0.3) +
-  geom_line(aes(x=val, y=fit, colour=group)) +
-  facet_grid(season ~ cov, scales="free") +
-  theme(legend.position = "bottom")
-
-gridExtra::grid.arrange(plot.3, plot.expert, plot.flyway, ncol = 3)

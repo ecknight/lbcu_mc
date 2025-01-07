@@ -1,4 +1,4 @@
-#https://bookdown.org/adam_smith2/bbsbayes_intro_workshop/
+#See https://bookdown.org/adam_smith2/bbsbayes_intro_workshop/ for tutorial on bbsBayes
 
 #PREAMBLE####
 
@@ -14,7 +14,8 @@ source("functions.R")
 clust <- read.csv("Data/LBCUBBSClusters.csv") 
 
 #2. Import bbs monitoring data----
-load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
+#FILL IN FILE PATH FOR BBS DATA BELOW AS IN PREVIOUS SCRIPT
+load("bbs_raw_data.RData")
 
 #3. Set clusters----
 clusts <- unique(clust$nclust)
@@ -186,6 +187,3 @@ plot.index <- ggplot(indices.out) +
   geom_line(aes(x=Year, y=Index, colour=factor(Region))) +
   geom_vline(aes(xintercept=2007), linetype="dashed") + 
   facet_wrap(~nclust)
-plot.index
-
-ggsave(grid.arrange(plot.map, plot.bar, plot.index, nrow=3), height=18, width=12, units='in', filename="Figs/Trend_eBirdwindow.jpeg")

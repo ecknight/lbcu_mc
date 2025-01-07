@@ -1,14 +1,9 @@
 library(tidyverse)
-library(vegan)
-library(lme4)
-library(MuMIn)
 library(sf)
 library(adehabitatLT)
 library(data.table)
 
 options(scipen=99999)
-
-setwd("G:/My Drive/SMBC")
 
 #1. Get id for each bird----
 clust <- read.csv("Data/LBCUKDEClusters.csv") %>%

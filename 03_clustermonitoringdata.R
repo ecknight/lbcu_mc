@@ -7,6 +7,7 @@ library(rpart)
 library(party)
 library(klaR)
 library(caret)
+library(bbsBayes)
 
 options(scipen=9999)
 
@@ -16,7 +17,9 @@ options(scipen=9999)
 track.raw <- read.csv("Data/LBCUKDEClusters.csv")
 
 #2. Import bbs monitoring data----
-load("~/Library/Application Support/bbsBayes/bbs_raw_data.RData")
+fetch_bbs_data(release = "2020") #only do this once
+#FILL IN FILE PATH FOR BBS DATA BELOW
+load("bbs_raw_data.RData")
 
 bbs <- bbs_data[["bird"]] %>% 
   dplyr::filter(AOU==2640,

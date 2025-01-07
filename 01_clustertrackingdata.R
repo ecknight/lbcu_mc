@@ -37,71 +37,6 @@ dat.main <- dat.use |>
   sample_n(1) |>
   ungroup()
 
-# #Take weighted mean across years for the breeding season
-# dat.main.breed <- dat.use |> 
-#   dplyr::filter(season=="breed") |> 
-#   group_by(id, season) |> 
-#   summarize(X = mean((X*days)/days),
-#             Y = mean((Y*days)/days)) |> 
-#   ungroup()
-# 
-# #Use single clustered location with most days for the other seasons
-# dat.list <- dat.use |> 
-#   dplyr::filter(season!="breed") |> 
-#   dplyr::select(id, season) |> 
-#   unique()
-# 
-# dat.main.other <- data.frame()
-# for(i in 1:nrow(dat.list)){
-#   
-#   #Get the data for this iteration
-#   dat.i <- dat.use %>% 
-#     dplyr::filter(id==dat.list$id[i],
-#                   season==dat.list$season[i])
-#   
-#   #cluster
-#   mat1 <- matrix(dat.i$X)
-#   mat2 <- matrix(dat.i$Y)
-#   mat <- cbind(mat1, mat2)
-#   
-#   shift <- meanShift(mat,
-#                      algorithm="KDTREE",
-#                      bandwidth=c(1,1))
-#   
-#   #join cluster ID back to data
-#   dat.shift <- dat.i %>% 
-#     mutate(cluster = shift[[1]][,1])
-#   
-#   #Pick the cluster ID with the most days and calculate weighted mean of coordinates
-#   dat.select <- dat.shift |> 
-#     group_by(cluster) |> 
-#     summarize(days = sum(days)) |> 
-#     ungroup() |> 
-#     dplyr::filter(days==max(days)) |> 
-#     left_join(dat.shift |> dplyr::select(-days)) |> 
-#     group_by(id) |> 
-#     summarize(X = mean((X*days)/days),
-#               Y = mean((Y*days)/days)) |> 
-#     ungroup()
-# 
-#   #Save
-#   dat.main.other <- rbind(dat.main.other,
-#                           dat.select |> 
-#                             mutate(season = dat.list$season[i]))
-#   
-# }
-# 
-# #Put together----
-# dat.main <- rbind(dat.main.breed, dat.main.other) |> 
-#   dplyr::filter(!is.na(id)) |> 
-#   st_as_sf(coords=c("X", "Y"), crs=3857) |> 
-#   st_transform(crs=4326) |> 
-#   st_coordinates() |> 
-#   data.frame() |> 
-#   rename("lon"="X", "lat"= "Y") |> 
-#   cbind(rbind(dat.main.breed, dat.main.other)|> 
-#           dplyr::filter(!is.na(id))) 
-
 #4. Make wide----
 dat.wide <- dat.main |> 
   select(id, season, X, Y) |> 
@@ -189,13 +124,11 @@ dat.fly <- dat.main |>
 #9. Put together----
 dat.final <- rbind(dat.out, dat.expert, dat.fly)
 
-#10. Plot----
+#10. Visualize----
 ggplot(dat.final) +
   geom_point(aes(x=X, y=Y, colour=factor(group))) +
   facet_grid(season ~ nclust, scales="free_y") + 
   scale_colour_viridis_d()
-
-ggsave(filename="Figs/KDE_stopovers.jpeg", width=18, height = 10)
 
 #11. Save----
 write.csv(dat.final, "Data/LBCUKDEClusters.csv", row.names=FALSE)

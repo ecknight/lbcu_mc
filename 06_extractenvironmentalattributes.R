@@ -15,16 +15,13 @@ ee_Initialize(gcs=TRUE)
 ee_check()
 
 #2. Create GCS bucket----
-# Create your own container
-# project_id <- ee_get_earthengine_path() %>% 
-#   list.files(., "\\.json$", full.names = TRUE) %>% 
-#   jsonlite::read_json() %>% 
-#   '$'(project_id) # Get the Project ID
-# 
-# googleCloudStorageR::gcs_create_bucket("lbcu", projectId = project_id)
+# Only do this once
+project_id <- ee_get_earthengine_path() %>%
+  list.files(., "\\.json$", full.names = TRUE) %>%
+  jsonlite::read_json() %>%
+  '$'(project_id) # Get the Project ID
 
-#3. Set wd----
-setwd("G:/My Drive/SMBC")
+googleCloudStorageR::gcs_create_bucket("lbcu", projectId = project_id)
 
 #A. INDIVIDUAL ATTRIBUTES####
 
