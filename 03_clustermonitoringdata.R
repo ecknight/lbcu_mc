@@ -1,15 +1,10 @@
 library(tidyverse)
 library(class)
 library(sf)
+library(sp)
 library(data.table)
 library(adehabitatHR)
-library(rpart)
-library(party)
-library(klaR)
-library(caret)
 library(bbsBayes)
-
-options(scipen=9999)
 
 #A. PREAMBLE####
 
@@ -21,44 +16,44 @@ fetch_bbs_data(release = "2020") #only do this once
 #FILL IN FILE PATH FOR BBS DATA BELOW
 load("bbs_raw_data.RData")
 
-bbs <- bbs_data[["bird"]] %>% 
+bbs <- bbs_data[["bird"]] |> 
   dplyr::filter(AOU==2640,
                 Year >= 1970)
 
-routes <- bbs %>% 
-  dplyr::select(RouteDataID) %>%
-  unique() %>% 
-  left_join(bbs_data[["route"]]) %>% 
-  group_by(countrynum, statenum, Route, Latitude, Longitude) %>%
-  summarize(n = n()) %>% 
-  dplyr::filter(!is.na(Latitude)) %>% 
+routes <- bbs |> 
+  dplyr::select(RouteDataID) |>
+  unique() |> 
+  left_join(bbs_data[["route"]]) |> 
+  group_by(countrynum, statenum, Route, Latitude, Longitude) |>
+  summarize(n = n()) |> 
+  dplyr::filter(!is.na(Latitude)) |> 
   ungroup()
 
-bbs.utm <- routes %>% 
-  st_as_sf(coords=c("Longitude", "Latitude"), crs=4326) %>% 
-  st_transform(crs=3857) %>% 
-  st_coordinates() %>% 
-  cbind(routes) %>% 
+bbs.utm <- routes |> 
+  st_as_sf(coords=c("Longitude", "Latitude"), crs=4326) |> 
+  st_transform(crs=3857) |> 
+  st_coordinates() |> 
+  cbind(routes) |> 
   mutate(id=paste(countrynum, statenum, Route, sep="-"),
          type="bbs")
 
 #3. Determine if tracking data near enough to bbs route----
 
 #calculate distance between tracking points and bbs routes
-track.sf <- track.raw %>% 
-  dplyr::filter(season=="breed") %>% 
-  dplyr::select(lat, lon) %>% 
-  unique() %>% 
+track.sf <- track.raw |> 
+  dplyr::filter(season=="breed") |> 
+  dplyr::select(lat, lon) |> 
+  unique() |> 
   st_as_sf(coords=c("lon", "lat"), crs=4326) 
 
-bbs.sf <- routes %>% 
+bbs.sf <- routes |> 
   st_as_sf(coords=c("Longitude", "Latitude"), crs=4326)
 
-bbs.near <- bbs.sf %>% 
+bbs.near <- bbs.sf |> 
   st_nearest_feature(track.sf)
 
-bbs.dist <- data.frame(distance = as.numeric(st_distance(bbs.sf, track.sf[bbs.near,], by_element = TRUE))) %>% 
-  cbind(bbs.utm) %>% 
+bbs.dist <- data.frame(distance = as.numeric(st_distance(bbs.sf, track.sf[bbs.near,], by_element = TRUE))) |> 
+  cbind(bbs.utm) |> 
   mutate(distance = distance/1000)
 
 #visualize
@@ -70,7 +65,7 @@ ggplot() +
 hist(bbs.dist$distance)
 
 #remove points < 95% (500 km)
-bbs.use <- bbs.dist %>% 
+bbs.use <- bbs.dist |> 
   dplyr::filter(distance < quantile(distance, 0.95))
 
 #visualize again
@@ -94,12 +89,12 @@ for(i in 1:length(clusts)){
   set.seed(i)
   
   #2. Wrangle tracking data----
-  track.i <- track.raw %>% 
+  track.i <- track.raw |> 
     dplyr::filter(nclust==clusts[i],
                   season=="breed")
   
   #3. Put together with BBS data----
-  bbs.i <- bbs.use %>% 
+  bbs.i <- bbs.use |> 
     dplyr::select(id, X, Y, type)
   
   #4. KNN----
@@ -107,7 +102,7 @@ for(i in 1:length(clusts)){
   
   knn.out[[i]] <- data.frame(knncluster=knn.i,
                              knnprob=attr(knn.i, "prob"),
-                             nclust=clusts[i]) %>% 
+                             nclust=clusts[i]) |> 
     cbind(bbs.i)
   
   print(paste0("Finished cluster ", i, " of ", length(clusts)))
@@ -118,7 +113,7 @@ for(i in 1:length(clusts)){
 knn.all <- rbindlist(knn.out)
 
 #6. Visualize----
-track.final <- track.raw %>% 
+track.final <- track.raw |> 
   dplyr::filter(season=="breed",
                 nclust %in% clusts)
 
@@ -134,7 +129,7 @@ sp <- SpatialPointsDataFrame(coords=cbind(knn.all$X, knn.all$Y),
 
 mp <- mcp(sp[,1], percent=100)
 
-knn.area <- data.frame(mp) %>% 
+knn.area <- data.frame(mp) |> 
   separate(id, into=c("knncluster", "nclust"))
 
 #15. Save out----

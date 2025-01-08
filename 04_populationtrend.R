@@ -5,9 +5,8 @@
 library(tidyverse)
 library(bbsBayes)
 library(shinystan)
-library(gridExtra)
-library(data.table)
 
+#Read in altered bbsBayes functions for defining custom strata. Note you can now do this as part of the bbsBayes2 package.
 source("functions.R")
 
 #1. Load clusters for BBS routes with LBCU on them----
@@ -31,18 +30,18 @@ for(i in 1:length(clusts)){
   #2. Wrangle bbs data into just routes of interest and add cluster attribution----
   bbs <- list()
   
-  bbs[["route_strat"]] <- bbs_data[["route"]] %>% 
-    mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-    inner_join(clust.i) %>% 
+  bbs[["route_strat"]] <- bbs_data[["route"]] |> 
+    mutate(id = paste(countrynum, statenum, Route, sep="-")) |> 
+    inner_join(clust.i) |> 
     mutate(strat_name=knncluster,
            rt.uni=paste(statenum, Route, sep="-"),
            rt.uni.y=paste(rt.uni, Year, sep="-"))
   
   bbs[["species_strat"]] <- bbs_data[["species"]]
   
-  bbs[["bird_strat"]] <- bbs_data[["bird"]] %>% 
-    mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-    dplyr::filter(id %in% clust.i$id) %>% 
+  bbs[["bird_strat"]] <- bbs_data[["bird"]] |> 
+    mutate(id = paste(countrynum, statenum, Route, sep="-")) |> 
+    dplyr::filter(id %in% clust.i$id) |> 
     mutate(rt.uni=paste(statenum, Route, sep="-"),
            rt.uni.y=paste(rt.uni, Year, sep="-"))
   
@@ -83,18 +82,18 @@ for(i in 1:length(clusts)){
   #3. Wrangle bbs data into just routes of interest and add cluster attribution----
   bbs <- list()
   
-  bbs[["route_strat"]] <- bbs_data[["route"]] %>% 
-    mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-    inner_join(clust.i) %>% 
+  bbs[["route_strat"]] <- bbs_data[["route"]] |> 
+    mutate(id = paste(countrynum, statenum, Route, sep="-")) |> 
+    inner_join(clust.i) |> 
     mutate(strat_name=knncluster,
            rt.uni=paste(statenum, Route, sep="-"),
            rt.uni.y=paste(rt.uni, Year, sep="-"))
   
   bbs[["species_strat"]] <- bbs_data[["species"]]
   
-  bbs[["bird_strat"]] <- bbs_data[["bird"]] %>% 
-    mutate(id = paste(countrynum, statenum, Route, sep="-")) %>% 
-    dplyr::filter(id %in% clust.i$id) %>% 
+  bbs[["bird_strat"]] <- bbs_data[["bird"]] |> 
+    mutate(id = paste(countrynum, statenum, Route, sep="-")) |> 
+    dplyr::filter(id %in% clust.i$id) |> 
     mutate(rt.uni=paste(statenum, Route, sep="-"),
            rt.uni.y=paste(rt.uni, Year, sep="-"))
   
@@ -109,8 +108,8 @@ for(i in 1:length(clusts)){
   #5. Create annual indices----
   all_area_weights <- utils::read.csv("Data/area_weight.csv") |> 
     dplyr::filter(knncluster==clusts[i]) |> 
-    mutate(area_sq_km = area/1000) %>% 
-    rename(region = nclust) %>% 
+    mutate(area_sq_km = area/1000) |> 
+    rename(region = nclust) |> 
     dplyr::select(region, area_sq_km)
   
   write.csv(all_area_weights, "/Library/Frameworks/R.framework/Versions/4.1/Resources/library/bbsBayes/composite-regions/cluster.csv", row.names = FALSE)
@@ -127,21 +126,21 @@ for(i in 1:length(clusts)){
   
   #9. Save output----
   trend.list[[i]] <- data.frame(route = dat$route,
-                          count = dat$count) %>%  
-    mutate(pres = ifelse(count > 0, 1, 0)) %>% 
-    group_by(route) %>% 
+                          count = dat$count) |>  
+    mutate(pres = ifelse(count > 0, 1, 0)) |> 
+    group_by(route) |> 
     summarize(pres = sum(count),
               count.mn = mean(count),
               count.sd = sd(count),
               count.max = max(count),
-              years = n()) %>% 
-    ungroup() %>% 
-    left_join(bbs$route_strat %>% 
-                rename(route = rt.uni) %>% 
-                dplyr::select(Country, State, route, id, knncluster,  X, Y) %>% 
-                unique() %>% 
-                mutate(knncluster = as.character(knncluster))) %>% 
-    left_join(trends %>% 
+              years = n()) |> 
+    ungroup() |> 
+    left_join(bbs$route_strat |> 
+                rename(route = rt.uni) |> 
+                dplyr::select(Country, State, route, id, knncluster,  X, Y) |> 
+                unique() |> 
+                mutate(knncluster = as.character(knncluster))) |> 
+    left_join(trends |> 
                 mutate(knncluster = Region)) |> 
     mutate(nclust = clusts[i])
   
@@ -160,9 +159,9 @@ write.csv(trend.out, "Data/LBCU_trend_gamye.csv")
 #VISUALIZE####
 
 #1. Wrangle----
-trend.sum <- trend.out %>% 
-  dplyr::select(nclust, knncluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') %>% 
-  unique() %>% 
+trend.sum <- trend.out |> 
+  dplyr::select(nclust, knncluster, Trend, 'Trend_Q0.025', 'Trend_Q0.975') |> 
+  unique() |> 
   rename(up = 'Trend_Q0.975', down = 'Trend_Q0.025')
 
 bbs.use <- read.csv("Data/BBSRoutesToUse.csv")

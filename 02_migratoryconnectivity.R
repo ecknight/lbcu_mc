@@ -1,10 +1,5 @@
 library(tidyverse)
 library(data.table)
-library(vegan)
-library(adehabitatHR)
-library(sf)
-library(sp)
-library(raster)
 library(MigConnectivity)
 library(ebirdst)
 
@@ -763,7 +758,6 @@ for(j in 1:length(clusters)){
 }
 
 write.csv(mc.df, "Data/LBCUMigConnectivity.csv", row.names = FALSE)
-mc.df <- read.csv("Data/LBCUMigConnectivity.csv")
 
 #13. Summarize MC per season----
 ggplot(mc.df) +

@@ -1,36 +1,29 @@
 library(tidyverse)
 library(ClustImpute)
 library(data.table)
-library(missMDA)
-library(FactoMineR)
+library(downloader)
 library(sf)
-library(meanShiftR)
-
-options(scipen=9999)
 
 #1. Import data----
-raw <- read.csv("Data/LBCUMCLocations.csv")
-
-dat <- raw %>% 
-  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) %>% 
-  rename(seasoncluster=cluster)
+dat <- read.csv("Data/LBCUMCLocations.csv")
 
 #2. Use only birds with known breeding & wintering location---
 #ID birds with breeding and wintering ground locations
-dat.n <- dat  %>% 
-  dplyr::filter(season %in% c("breed", "winter")) %>% 
-  group_by(id, season) %>% 
-  summarize(n=n()) %>% 
-  group_by(id) %>% 
-  summarize(n=n()) %>% 
-  dplyr::filter(n==2) %>% 
+dat.n <- dat  |> 
+  dplyr::filter(season %in% c("breed", "winter")) |> 
+  group_by(id, season) |> 
+  summarize(n=n()) |> 
+  group_by(id) |> 
+  summarize(n=n()) |> 
+  dplyr::filter(n==2) |> 
   ungroup()
 
 dat.use <- dat |> 
   dplyr::filter(id %in% dat.n$id)
 
 #3. Get single seasonal location for each individual----
-#This is currently just the single location with most days, could cluster spatially and sum days across years
+#This is the single location with most days
+set.seed(1234)
 dat.main <- dat.use |>
   group_by(id, season) |>
   dplyr::filter(days==max(days)) |>
@@ -40,7 +33,7 @@ dat.main <- dat.use |>
 #4. Make wide----
 dat.wide <- dat.main |> 
   select(id, season, X, Y) |> 
-  pivot_wider(id_cols=id, names_from=season, values_from=X:Y) %>%
+  pivot_wider(id_cols=id, names_from=season, values_from=X:Y) |>
   data.frame()
 
 dat.clust <- dat.wide |> 
@@ -58,9 +51,9 @@ for(j in 1:length(clusters)){
                                  id = dat.wide$id)
 }
 
-dat.out <- rbindlist(kde.cluster) %>% 
-  pivot_wider(id_cols=id, names_from=nclust, values_from=group, names_prefix="kde_") %>% 
-  left_join(dat.main) |> 
+dat.out <- rbindlist(kde.cluster) |> 
+  pivot_wider(id_cols=id, names_from=nclust, values_from=group, names_prefix="kde_") |> 
+  left_join(dat.main, multiple="all") |> 
   pivot_longer(names_to="nclust", values_to="group", cols=kde_2:kde_5, names_prefix="kde_")
 
 #6. Check nclust have at least 5 individuals----
@@ -68,41 +61,46 @@ table(dat.out$nclust, dat.out$group)
 
 #7. Add expert clusters----
 
+#Download coastal shapefile - only do this once
+temp <- tempfile()
+download("https://www.ngdc.noaa.gov/mgg/shorelines/data/gshhg/latest/gshhg-shp-2.3.7.zip", temp)
+unzip(zipfile=temp, exdir="Data")
+unlink(temp)
+
 #Get distance to coast
-coast <- read_sf("gis/gshhg-shp-2.3.7/GSHHS_shp/l/GSHHS_l_L1.shp") %>% 
-  st_make_valid() %>% 
+coast <- read_sf("Data/GSHHS_shp/l/GSHHS_l_L1.shp") |> 
+  st_make_valid() |> 
   st_cast("LINESTRING")
 
-dat.sf <- dat.main %>% 
+dat.sf <- dat.main |> 
   unique() |> 
   st_as_sf(coords=c("lon", "lat"), crs=4326, remove=FALSE) 
 
-dat.near <- dat.sf %>% 
+dat.near <- dat.sf |> 
   st_nearest_feature(coast)
 
-dat.coast <- data.frame(distance = as.numeric(st_distance(dat.sf, coast[dat.near,], by_element = TRUE))) %>% 
-  cbind(dat.main |> 
-          dplyr::select(-distance))
+dat.coast <- data.frame(distance = as.numeric(st_distance(dat.sf, coast[dat.near,], by_element = TRUE))) |> 
+  cbind(dat.main)
 
 #check
 ggplot(dat.coast) +
   geom_point(aes(x=lon, y=lat, colour=distance))
 
 #assign cluster
-dat.expert <- dat.coast  %>% 
-  dplyr::filter(season=="winter") %>% 
+dat.expert <- dat.coast  |> 
+  dplyr::filter(season=="winter") |> 
   mutate(group = case_when(X > -10960000 & distance < 100000 ~ 4,
                            lon < -105 & lon > -108 & distance < 10000 ~ 2,
                            lon < -108 & lon > -118 ~ 2,
                            lon < -118 ~ 1,
-                           !is.na(lon) ~ 3)) %>% 
+                           !is.na(lon) ~ 3)) |> 
   mutate(nclust="expert") |> 
   dplyr::select(id, group, nclust) |> 
-  left_join(dat.main)
+  left_join(dat.main, multiple = "all")
 
 #8. Add flyway clusters----
 
-#Get shapefile
+#Get shapefile - available as part of code and supplementary data package on Zenodo 10.5281/zenodo.14607317
 sf_use_s2(FALSE)
 flyway <- read_sf("Data/Atlas Regions/Final_globalregions.shp") |> 
   dplyr::filter(region %in% c("Pacific", "Midcontinent", "Atlantic")) |> 
@@ -116,7 +114,7 @@ dat.fly <- dat.main |>
   st_drop_geometry() |> 
   dplyr::select(id, region) |> 
   unique() |> 
-  left_join(dat.main) |> 
+  left_join(dat.main, multiple="all") |> 
   mutate(group = ifelse(region=="Pacific", 1, 2),
          nclust = "flyway") |> 
   dplyr::select(-region)

@@ -130,6 +130,9 @@ dredged.pick <- dredged |>
   dplyr::filter(row_number()==1) |> 
   ungroup()
 
+if(!dir.exists("Results")){
+  dir.create("Results")
+}
 write.csv(dredged, "Results/RSFAIC.csv", row.names = FALSE)
 
 #10. Run final models----
@@ -163,7 +166,6 @@ for(i in 1:nrow(loop)){
   m.base <- glm(response ~ 1, family = "binomial", data = dat.i, na.action = "na.fail")
   
   m.final[[i]] <- update(m.base, formula = as.formula(paste0("~ ", paste(vars[[i]], collapse = " + "))))
-  
   
 }
 

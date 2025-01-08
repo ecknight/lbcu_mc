@@ -1,10 +1,7 @@
 library(sf)
-library(raster)
 library(tidyverse)
-library(lubridate)
 library(rgee)
 library(data.table)
-library(adehabitatHR)
 
 options(scipen=99999)
 
@@ -16,9 +13,9 @@ ee_check()
 
 #2. Create GCS bucket----
 # Only do this once
-project_id <- ee_get_earthengine_path() %>%
-  list.files(., "\\.json$", full.names = TRUE) %>%
-  jsonlite::read_json() %>%
+project_id <- ee_get_earthengine_path() |>
+  list.files(., "\\.json$", full.names = TRUE) |>
+  jsonlite::read_json() |>
   '$'(project_id) # Get the Project ID
 
 googleCloudStorageR::gcs_create_bucket("lbcu", projectId = project_id)
@@ -27,10 +24,10 @@ googleCloudStorageR::gcs_create_bucket("lbcu", projectId = project_id)
 
 #1. Read in shapefile of HRs and get centroid----
 #just use one nclust group, no need to do twice
-kde <- read_sf("gis/shp/kde_individual.shp") %>% 
-  st_make_valid() %>% 
-  st_centroid() %>% 
-  mutate(year = as.numeric(year)-1) %>% 
+kde <- read_sf("Data/shp/kde_individual.shp") |> 
+  st_make_valid() |> 
+  st_centroid() |> 
+  mutate(year = as.numeric(year)-1) |> 
   dplyr::filter(nclust=="3")
 
 #2. Set up to loop through years----
@@ -38,7 +35,7 @@ years <- sort(unique(kde$year))
 dat.out <- list()
 for(i in 1:length(years)){
   
-  kde.i <- kde %>% 
+  kde.i <- kde |> 
     dplyr::filter(year==years[i])
   
   #3. Get drought data----
@@ -82,7 +79,7 @@ for(i in 1:length(years)){
     print(paste0("Finished individual ", j, " of ", nrow(kde.i), " for year ", years[i]))
   }
   
-  dat.out[[i]] <- data.table::rbindlist(stack.mn, fill=TRUE)
+  dat.out[[i]] <- rbindlist(stack.mn, fill=TRUE)
   
 }
 
@@ -91,13 +88,13 @@ for(i in 1:length(years)){
 dat <- do.call(rbind, dat.out)
 
 #14. Join to other data and tidy----
-covs <- cbind(dat, kde)  %>% 
+covs <- cbind(dat, kde)  |> 
   st_drop_geometry() |> 
-  left_join(kde %>% 
-              st_coordinates() %>% 
-              data.frame() %>% 
-              cbind(data.frame(kde)) %>% 
-              dplyr::select(-id, -geometry)) %>% 
+  left_join(kde |> 
+              st_coordinates() |> 
+              data.frame() |> 
+              cbind(data.frame(kde)) |> 
+              dplyr::select(-id, -geometry)) |> 
   mutate(change = ifelse(is.na(change), 0, change),
          seasonality = ifelse(is.na(seasonality), 0, seasonality),
          crop = ifelse(is.na(crop), 0, crop),
@@ -111,7 +108,7 @@ write.csv(covs, "Data/LBCU_environvars.csv", row.names = FALSE)
 #B. REGION ATTRIBUTES####
 
 #1. Read in shapefile of HRs and get centroid----
-kde <- read_sf("gis/shp/kde_region.shp") %>% 
+kde <- read_sf("Data/shp/kde_region.shp") |> 
   st_make_valid() 
 
 #2. Set up to loop through nclust---
@@ -175,36 +172,36 @@ write.csv(dat, "Data/LBCU_environvars_region.csv", row.names = FALSE)
 
 #1. Read in shapefile of HRs and get centroid----
 #just use one nclust group, no need to do twice
-kde <- read_sf("gis/shp/kde_individual.shp") %>% 
-  st_make_valid() %>% 
-  st_centroid() %>% 
+kde <- read_sf("Data/shp/kde_individual.shp") |> 
+  st_make_valid() |> 
+  st_centroid() |> 
   mutate(year = as.numeric(year)-1)
 
 #1. Set up loop for combo of season * group----
-loop <- kde %>% 
-  data.frame() %>% 
+loop <- kde |> 
+  data.frame() |> 
   dplyr::filter(nclust %in% c("3", "expert", "flyway")) |> 
-  dplyr::select(nclust, group, season) %>% 
+  dplyr::select(nclust, group, season) |> 
   unique()
 
 #2. MCP of home ranges----
 mcp.list <- list()
 for(i in 1:nrow(loop)){
   
-  kde.i <- kde %>% 
+  kde.i <- kde |> 
     dplyr::filter(group==loop$group[i],
                   season==loop$season[i],
-                  nclust==loop$nclust[i]) %>% 
-    mutate(id = paste0(nclust, "-", group, "-", season)) %>% 
-    dplyr::select(id) %>% 
+                  nclust==loop$nclust[i]) |> 
+    mutate(id = paste0(nclust, "-", group, "-", season)) |> 
+    dplyr::select(id) |> 
     as_Spatial()
   
-  mcp.list[[i]] <- mcp(kde.i) %>% 
+  mcp.list[[i]] <- mcp(kde.i) |> 
     st_as_sf()
   
 }
 
-mcp <- do.call(rbind, mcp.list) %>% 
+mcp <- do.call(rbind, mcp.list) |> 
   separate(id, into=c("nclust", "group", "season")) |> 
   st_make_valid()
 plot(mcp) 
@@ -214,30 +211,30 @@ set.seed(1234)
 avail.list.list <- list()
 for(i in 1:nrow(loop)){
   
-  n.i <- kde %>% 
+  n.i <- kde |> 
     dplyr::filter(group==loop$group[i],
                   season==loop$season[i],
-                  nclust==loop$nclust[i]) %>% 
-    group_by(year) %>% 
-    summarize(n=n()) %>% 
+                  nclust==loop$nclust[i]) |> 
+    group_by(year) |> 
+    summarize(n=n()) |> 
     ungroup()
   
   avail.list <- list()
   for(j in 1:nrow(n.i)){
     
-    ids.j <- kde %>% 
+    ids.j <- kde |> 
       dplyr::filter(group==loop$group[i],
                     season==loop$season[i],
                     nclust==loop$nclust[i],
                     year==n.i$year[j])
     
-    avail.list[[j]] <- st_sample(mcp[i,], n.i$n[j]*10) %>% 
-      st_coordinates() %>% 
-      data.frame() %>%
+    avail.list[[j]] <- st_sample(mcp[i,], n.i$n[j]*10) |> 
+      st_coordinates() |> 
+      data.frame() |>
       mutate(group=loop$group[i],
              season=loop$season[i],
              nclust=loop$nclust[i],
-             year=n.i$year[j]) %>% 
+             year=n.i$year[j]) |> 
       cbind(data.frame(bird = rep(ids.j$bird)))
   }
   
@@ -252,41 +249,41 @@ ggplot() +
   facet_grid(nclust~season)
 
 #4. Put used & available together----
-pts <- avail %>% 
-  mutate(type = "avail") %>% 
-  rbind(kde %>% 
-          st_coordinates() %>% 
-          cbind(kde) %>% 
-          data.frame() %>% 
-          dplyr::select(nclust, group, season, year, bird, X, Y) %>% 
-          mutate(type = "used")) %>% 
-  arrange(year, season, group) %>% 
-  group_by(year, season, group) %>% 
-  mutate(index = row_number()-1) %>% 
+pts <- avail |> 
+  mutate(type = "avail") |> 
+  rbind(kde |> 
+          st_coordinates() |> 
+          cbind(kde) |> 
+          data.frame() |> 
+          dplyr::select(nclust, group, season, year, bird, X, Y) |> 
+          mutate(type = "used")) |> 
+  arrange(year, season, group) |> 
+  group_by(year, season, group) |> 
+  mutate(index = row_number()-1) |> 
   ungroup()
 
 #5. Define radius (mean HR size)----
-rad <- kde %>% 
-  data.frame() %>% 
-  group_by(nclust, group, season) %>% 
-  summarize(rad = mean(rad)) %>% 
+rad <- kde |> 
+  data.frame() |> 
+  group_by(nclust, group, season) |> 
+  summarize(rad = mean(rad)) |> 
   ungroup()
 
 #6. Calculate mean months for each season----
-raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") %>% 
-  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) %>% 
-  dplyr::filter(segment %in% c("depart", "arrive")) %>% 
+raw <- read.csv("Data/LBCU_FilteredData_Segmented.csv") |> 
+  dplyr::filter(!id %in% c(46768277, 33088, 129945787, 46770723, 46769927, 86872)) |> 
+  dplyr::filter(segment %in% c("depart", "arrive")) |> 
   mutate(season = case_when(season=="breed" ~ "springmig",
                             season=="winter" ~ "fallmig",
-                            !is.na(season) ~ season)) %>% 
-  group_by(segment, season) %>% 
-  summarize(mean = mean(doy)) %>% 
+                            !is.na(season) ~ season)) |> 
+  group_by(segment, season) |> 
+  summarize(mean = mean(doy)) |> 
   ungroup()
 
 #7. Set up to loop through year*season*group----
-years <- pts %>% 
-  dplyr::select(year, season, group, nclust) %>% 
-  unique() %>% 
+years <- pts |> 
+  dplyr::select(year, season, group, nclust) |> 
+  unique() |> 
   mutate(month.start = case_when(season=="springmig" ~ "02",
                                  season=="breed" ~ "04",
                                  season=="fallmig" ~ "06",
@@ -296,22 +293,22 @@ years <- pts %>%
                                season=="fallmig" ~ "07",
                                season=="winter" ~ "02"),
          year.start = year,
-         year.end = ifelse(season=="winter", year+1, year)) %>% 
+         year.end = ifelse(season=="winter", year+1, year)) |> 
   left_join(rad)
 
 stack.list <- list()
 for(i in 1:nrow(years)){
   
   #8. Filter points----
-  pts.i <- pts %>% 
+  pts.i <- pts |> 
     dplyr::filter(year==years$year[i],
                   season==years$season[i],
                   nclust==years$nclust[i],
                   group==years$group[i])
   
   #9. Send to gee----
-  data <- pts.i %>% 
-    st_as_sf(coords=c("X", "Y"), crs=4326) %>% 
+  data <- pts.i |> 
+    st_as_sf(coords=c("X", "Y"), crs=4326) |> 
     sf_as_ee()
   
   #10. Get drought data----
@@ -355,7 +352,7 @@ for(i in 1:nrow(years)){
 dat <- data.table::rbindlist(stack.list, fill=TRUE)
 
 #14. Join to other data and tidy----
-covs <- dat %>% 
+covs <- dat |> 
   mutate(change = ifelse(is.na(change), 0, change),
          seasonality = ifelse(is.na(seasonality), 0, seasonality),
          crop = ifelse(is.na(crop), 0, crop),
