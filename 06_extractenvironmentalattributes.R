@@ -8,6 +8,7 @@ options(scipen=99999)
 #PREAMBLE####
 
 #1. Initialize rgee----
+#RGEE SET UP REQUIRED. SEE DETAILS AT https://cran.r-project.org/web/packages/rgee/vignettes/rgee01.html 
 ee_Initialize(gcs=TRUE)
 ee_check()
 
