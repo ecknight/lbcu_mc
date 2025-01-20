@@ -7,7 +7,7 @@ library(ebirdst)
 dat <- read.csv("Data/LBCUKDEClusters.csv")
 
 #2. Extract relative abundance information from eBird----
-#FILL IN EBIRD ACCESS KEY AND RASTER FILE PATH BELOW
+#FILL IN EBIRD ACCESS KEY AND RASTER FILE PATH BELOW. DETAILS AVAILBLE AT https://ebird.github.io/ebirdst/
 set_ebirdst_access_key("")
 ebirdst_download("lobcur")
 ebd <- load_raster("lobcur-ERD2019-STATUS-20200930-da308f90", product="abundance_seasonal")
